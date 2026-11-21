@@ -2010,8 +2010,21 @@ async function josShowRole(user,role){
 async function josRefreshPortalSession(which){
   try{
     const roleDb=which==='admin'?josAdminDb:which==='mitra'?josMitraDb:josDb;
-    const {data,error}=await roleDb.auth.getSession();if(error)throw error;
-    const session=data.session;if(!session)return;
+    // Tunggu pemulihan sesi lokal Supabase selesai sebelum menyimpulkan pelanggan logout.
+    let session=null,lastSessionError=null;
+    for(let attempt=0;attempt<5;attempt++){
+      const {data,error}=await roleDb.auth.getSession();
+      if(error){lastSessionError=error;throw error;}
+      session=data?.session||null;
+      if(session)break;
+      if(attempt<4)await new Promise(resolve=>setTimeout(resolve,250));
+    }
+    if(!session){
+      if(which==='customer'){
+        josMsg('josCustomerAuthMsg','Sesi login belum ditemukan di perangkat ini. Jika baru saja masuk dengan Google, tunggu sebentar lalu buka Akun kembali. Jika tetap muncul, masuk dengan Google sekali lagi.',true);
+      }
+      return;
+    }
     let user=session.user;
     if(which==='admin'){
       const {data:row,error:roleErr}=await josAdminDb.from('jos_admin_users').select('user_id').eq('user_id',user.id).maybeSingle();
