@@ -1472,10 +1472,9 @@ const josDb=window.supabase.createClient(
   {auth:{
     persistSession:true,
     autoRefreshToken:true,
-    // Google OAuth memakai implicit callback agar tidak bergantung pada PKCE verifier
-    // yang dapat hilang ketika Android berpindah antara browser dan aplikasi.
-    flowType:'implicit',
-    detectSessionInUrl:false,
+    // Gunakan PKCE secara konsisten dan biarkan Supabase memproses callback OAuth.
+    flowType:'pkce',
+    detectSessionInUrl:true,
     // Sesi halaman utama hanya untuk pelanggan; tidak berbagi storage dengan portal mitra.
     storageKey:'jos-customer-auth'
   }}
@@ -1655,7 +1654,7 @@ josEl('josCustomerGoogleLogin').onclick=josCustomerGoogleSignIn;
 let josGoogleOAuthCompleting=!!(new URLSearchParams(location.search).has('code') || /(?:^|[&#])access_token=/.test(location.hash));
 (async()=>{
  const params=new URLSearchParams(location.search);
- const hashParams=new URLSearchParams(location.hash.replace(/^#/,''));
+ const hashParams=new URLSearchParams(location.hash.replace(/^#/,'')); 
  const oauthError=params.get('error_description')||params.get('error')||hashParams.get('error_description')||hashParams.get('error');
  if(oauthError){
   josMsg('josCustomerAuthMsg','Login Google ditolak: '+oauthError,true);
@@ -1664,26 +1663,22 @@ let josGoogleOAuthCompleting=!!(new URLSearchParams(location.search).has('code')
  }
  if(!josGoogleOAuthCompleting)return;
  try{
-  let user=null;
-  if(params.has('code')){
-   const {data,error}=await josDb.auth.exchangeCodeForSession(params.get('code'));
+  // detectSessionInUrl:true membuat Supabase menyelesaikan callback PKCE/implicit
+  // satu kali saat client diinisialisasi. Jangan menukar code untuk kedua kalinya.
+  let session=null,user=null;
+  for(let attempt=0;attempt<20;attempt++){
+   const {data,error}=await josDb.auth.getSession();
    if(error)throw error;
-   user=data?.user||data?.session?.user||null;
-  }else{
-   const access_token=hashParams.get('access_token');
-   const refresh_token=hashParams.get('refresh_token');
-   if(access_token&&refresh_token){
-    const {data,error}=await josDb.auth.setSession({access_token,refresh_token});
-    if(error)throw error;
-    user=data?.user||data?.session?.user||null;
-   }
+   session=data?.session||null;
+   if(session?.user){user=session.user;break;}
+   await new Promise(resolve=>setTimeout(resolve,300));
   }
   if(!user){
    const {data,error}=await josDb.auth.getUser();
    if(error)throw error;
    user=data?.user||null;
   }
-  if(!user)throw Error('Google kembali ke aplikasi, tetapi sesi Supabase tidak ditemukan. Periksa URL Redirect Google di Supabase.');
+  if(!user)throw Error('Callback Google sudah kembali, tetapi Supabase belum menyimpan sesi. Periksa URL Redirect dan konfigurasi OAuth Supabase.');
   const resolved=await josResolveGoogleCustomer(user);
   if(!resolved)throw Error('Akun Google ini memiliki jenis akun atau aplikasi berbeda dan tidak dapat dibuka sebagai pelanggan JOS.');
   history.replaceState(null,'',location.pathname+location.search.split('?')[0]+'#akun');
