@@ -1652,6 +1652,7 @@ async function josCustomerGoogleSignIn(){
  }
 }
 josEl('josCustomerGoogleLogin').onclick=josCustomerGoogleSignIn;
+let josGoogleOAuthCompleting=new URLSearchParams(location.search).has('code');
 (async()=>{
  const params=new URLSearchParams(location.search);
  if(!params.has('code'))return;
@@ -1666,6 +1667,8 @@ josEl('josCustomerGoogleLogin').onclick=josCustomerGoogleSignIn;
   await josShowRole(resolved,'customer');
  }catch(err){
   josMsg('josCustomerAuthMsg','Verifikasi login Google gagal: '+err.message,true);
+ }finally{
+  josGoogleOAuthCompleting=false;
  }
 })();
 
@@ -2334,7 +2337,7 @@ josDb.auth.onAuthStateChange((event,session)=>{
   // Penjadwalan ini memberi kesempatan SDK menyelesaikan proses refresh token.
   setTimeout(()=>{
     if(josEl('josPortalOrders')?.classList.contains('open'))josLoadCustomerOrders();
-    if(josEl('josPortalCustomer')?.classList.contains('open') && session?.user){
+    if(josEl('josPortalCustomer')?.classList.contains('open') && session?.user && !josGoogleOAuthCompleting){
       josRefreshPortalSession('customer');
     }
   },0);
