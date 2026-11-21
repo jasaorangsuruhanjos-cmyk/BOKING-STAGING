@@ -1,8 +1,11 @@
 # JOS STAGING
 
-Private staging repository for testing JOS application changes.
+Repositori publik terpisah untuk pengujian aplikasi JOS. Kode di repositori publik dapat dilihat dan diunduh siapa saja.
 
-- Production repository: `BOKING`
-- Staging source: customer application file `index (43)(1).html` from the user's Library, captured 2026-11-21.
-- Staging must not be treated as production. No production DNS, database, or repository files are changed here.
-- Test changes here before any separately approved production release.
+- Repositori produksi: `BOKING`
+- Repositori staging: `BOKING-STAGING`
+- Sumber aplikasi pelanggan: `index (43).html` dari file yang diberikan pengguna, dipulihkan ke `index.html` pada 21 November 2026.
+- Manifest dan service worker khusus staging tersedia.
+- Staging bukan produksi. DNS, repositori, dan file produksi tidak diubah.
+- Uji perubahan di staging sebelum rilis terpisah yang disetujui pemilik.
+- Jangan menyimpan service-role key, token, password, atau rahasia server di repositori publik.
