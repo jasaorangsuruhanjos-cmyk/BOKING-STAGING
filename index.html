@@ -1610,6 +1610,33 @@ async function josCustomerSubmit(e){
 }
 josEl('josCustomerAuthForm').onsubmit=josCustomerSubmit;
 
+async function josResolveGoogleCustomer(user){
+ if(!user || user.is_anonymous || !user.email) return null;
+ const app=user.app_metadata||{},meta=user.user_metadata||{};
+ const isGoogle=app.provider==='google'||(app.providers||[]).includes('google')||(user.identities||[]).some(identity=>identity.provider==='google');
+ if(!isGoogle) return null;
+ const currentRole=meta.account_type||'';
+ if(currentRole==='customer') return user;
+ if(currentRole && currentRole!=='customer') return null;
+ const [{data:adminRow,error:adminError},{data:mitraRow,error:mitraError}]=await Promise.all([
+  josAdminDb.from('jos_admin_users').select('user_id').eq('user_id',user.id).maybeSingle(),
+  josMitraDb.from('jos_mitra_profiles').select('id').eq('id',user.id).maybeSingle()
+ ]);
+ if(adminError) throw adminError;
+ if(mitraError) throw mitraError;
+ if(adminRow || mitraRow) return null;
+ const {data,error}=await josDb.auth.updateUser({data:{
+  ...meta,
+  full_name:meta.full_name||meta.name||user.email.split('@')[0],
+  avatar_url:meta.avatar_url||meta.picture||null,
+  account_type:'customer',
+  app_brand:'JOS',
+  source_app:'JOS'
+ }});
+ if(error) throw error;
+ return data.user||user;
+}
+
 async function josCustomerGoogleSignIn(){
  try{
   josEl('josCustomerGoogleLogin').disabled=true;
@@ -1958,7 +1985,7 @@ async function josRefreshPortalSession(which){
     const roleDb=which==='admin'?josAdminDb:which==='mitra'?josMitraDb:josDb;
     const {data,error}=await roleDb.auth.getSession();if(error)throw error;
     const session=data.session;if(!session)return;
-    const user=session.user;
+    let user=session.user;
     if(which==='admin'){
       const {data:row,error:roleErr}=await josAdminDb.from('jos_admin_users').select('user_id').eq('user_id',user.id).maybeSingle();
       if(roleErr)throw roleErr;
@@ -1970,9 +1997,18 @@ async function josRefreshPortalSession(which){
       if(user.user_metadata?.account_type==='mitra'||p)await josShowRole(user,'mitra');
     }else{
       const userBrand=user.user_metadata?.app_brand||'JOS';
-      if(user.is_anonymous || !user.email || userBrand!=='JOS' || user.user_metadata?.account_type!=='customer'){
+      if(user.is_anonymous || !user.email || userBrand!=='JOS'){
         await josDb.auth.signOut();
         josPortalTab('customer');
+        return;
+      }
+      if(user.user_metadata?.account_type!=='customer'){
+        const resolved=await josResolveGoogleCustomer(user);
+        if(resolved) user=resolved;
+      }
+      if(user.user_metadata?.account_type!=='customer'){
+        josPortalTab('customer');
+        josMsg('josCustomerAuthMsg','Sesi Google ditemukan, tetapi akun belum dikenali sebagai pelanggan JOS. Silakan hubungi Admin JOS.',true);
         return;
       }
       await josShowRole(user,'customer');
