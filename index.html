@@ -697,7 +697,8 @@ body.jos-order-open .bottom{display:none!important}
 </nav>
 </div>
 <div aria-hidden="true" class="menu-backdrop" id="menuBackdrop"></div>
-<aside aria-hidden="true" aria-label="Menu utama" class="main-drawer" id="mainDrawer"><div class="drawer-head"><div class="drawer-logo">JOS</div><div><strong>Menu JOS</strong><small>Solusi Semua Kebutuhan Anda</small></div><button aria-label="Tutup menu" id="closeMainMenu" type="button">×</button></div>
+<aside aria-hidden="true" aria-label="Menu utama" class="main-drawer" id="mainDrawer">
+<div class="drawer-head"><div class="drawer-logo">JOS</div><div><strong>Menu JOS</strong><small>Solusi Semua Kebutuhan Anda</small></div><button aria-label="Tutup menu" id="closeMainMenu" type="button">×</button></div>
 <nav class="drawer-links">
 <button data-drawer="home" type="button"><span>⌂</span>Beranda</button>
 <button data-drawer="services" type="button"><span>▦</span>Layanan</button>
@@ -1396,7 +1397,8 @@ document.querySelectorAll('.cat').forEach(btn=>btn.addEventListener('click',()=>
     Taman:'Taman & Landscaping',
     Furniture:'Perbaikan Perabot',
     Supir:'Jasa Supir',
-    TKBM:'Bongkar Muat / TKBM'  };
+    TKBM:'Bongkar Muat / TKBM'
+  };
   const targetName=categoryTargets[key];
   const targetCard=cards.find(card=>card.dataset.name===targetName);
   if(targetCard){
@@ -1593,7 +1595,12 @@ async function josCustomerSubmit(e){
       }});
       if(error)throw error;
       josMsg('josCustomerAuthMsg',data.session?'Akun pelanggan berhasil dibuat dan sudah login.':'Pendaftaran berhasil.\nBuka email yang digunakan saat mendaftar.\nPeriksa folder Spam jika email verifikasi tidak ada di Inbox.');
-      if(data.session)await josShowRole(data.user,'customer');else josStartCustomerResendCountdown();
+      if(data.session){
+        await josShowRole(data.user,'customer');
+      }else{
+        alert('PENDAFTARAN BERHASIL!\n\nEmail verifikasi JOS sedang diproses. Periksa Inbox, lalu folder Spam atau Promotions jika belum terlihat. Pastikan alamat email yang digunakan saat mendaftar sudah benar.\n\nJika email belum masuk beberapa menit, gunakan tombol Kirim ulang email verifikasi.');
+        josStartCustomerResendCountdown();
+      }
     }else{
       const {data,error}=await josDb.auth.signInWithPassword({email,password});
       if(error)throw error;
@@ -2095,7 +2102,8 @@ function josRenderCustomerHistoryDates(){
  const dates=josCustomerHistoryDateWindow();
  const todayKey=josCustomerLocalDateKey(new Date());
  if(!dates.some(d=>josCustomerLocalDateKey(d)===josCustomerHistorySelectedDate))josCustomerHistorySelectedDate=todayKey;
- strip.innerHTML=dates.map(d=>{  const key=josCustomerLocalDateKey(d),active=key===josCustomerHistorySelectedDate;
+ strip.innerHTML=dates.map(d=>{
+  const key=josCustomerLocalDateKey(d),active=key===josCustomerHistorySelectedDate;
   const day=['Min','Sen','Sel','Rab','Kam','Jum','Sab'][d.getDay()];
   return `<button type="button" class="jos-customer-date${active?' active':''}" data-date="${key}" aria-pressed="${active}"><span>${day}</span><strong>${d.getDate()}</strong><small>${d.toLocaleDateString('id-ID',{month:'short'})}</small></button>`;
  }).join('');
