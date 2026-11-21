@@ -1484,11 +1484,11 @@ const josDb=window.supabase.createClient(
 // Setiap peran memakai client dan penyimpanan sesi yang benar-benar terpisah.
 const josMitraDb=window.supabase.createClient(
   'https://aqhfkcdglfijdtsgyzmq.supabase.co','sb_publishable_Ymh1RsVe9Ba9No27l58jGA_hpD04lSw',
-  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:'jos-mitra-auth'}}
+  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storageKey:'jos-mitra-auth'}}
 );
 const josAdminDb=window.supabase.createClient(
   'https://aqhfkcdglfijdtsgyzmq.supabase.co','sb_publishable_Ymh1RsVe9Ba9No27l58jGA_hpD04lSw',
-  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:'jos-admin-auth'}}
+  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storageKey:'jos-admin-auth'}}
 );
 
 const JOS_AFFILIATE_REF_KEY='jos_affiliate_referral_code';
