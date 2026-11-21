@@ -1615,16 +1615,13 @@ async function josResolveGoogleCustomer(user){
  const app=user.app_metadata||{},meta=user.user_metadata||{};
  const isGoogle=app.provider==='google'||(app.providers||[]).includes('google')||(user.identities||[]).some(identity=>identity.provider==='google');
  if(!isGoogle) return null;
+ // Hormati pemisahan akun: role/brand yang sudah ada tidak boleh diubah.
+ if(meta.app_brand && meta.app_brand!=='JOS') return null;
  const currentRole=meta.account_type||'';
  if(currentRole==='customer') return user;
  if(currentRole && currentRole!=='customer') return null;
- const [{data:adminRow,error:adminError},{data:mitraRow,error:mitraError}]=await Promise.all([
-  josDb.from('jos_admin_users').select('user_id').eq('user_id',user.id).maybeSingle(),
-  josDb.from('jos_mitra_profiles').select('id').eq('id',user.id).maybeSingle()
- ]);
- if(adminError) throw adminError;
- if(mitraError) throw mitraError;
- if(adminRow || mitraRow) return null;
+ // Google OAuth yang belum memiliki metadata role dianggap pendaftaran pelanggan baru.
+ // Hindari query tabel admin/mitra dari sesi pelanggan karena RLS dapat menolak SELECT.
  const {data,error}=await josDb.auth.updateUser({data:{
   ...meta,
   full_name:meta.full_name||meta.name||user.email.split('@')[0],
@@ -1662,7 +1659,12 @@ let josGoogleOAuthCompleting=new URLSearchParams(location.search).has('code');
   if(!data?.user)throw Error('Sesi Google tidak ditemukan.');
   const resolved=await josResolveGoogleCustomer(data.user);
   if(!resolved)throw Error('Akun Google ini sudah terdaftar sebagai Mitra/Admin atau bukan akun pelanggan JOS.');
-  history.replaceState(null,'',location.pathname+location.hash);
+  history.replaceState(null,'',location.pathname+'#akun');
+  // OAuth kembali dari Google harus membuka panel Akun, bukan hanya mengganti isi panel yang tertutup.
+  document.querySelectorAll('.portal-layer').forEach(x=>x.classList.remove('open'));
+  josEl('josPortalCustomer')?.classList.add('open');
+  if(typeof setJosPageStatus==='function')setJosPageStatus('Akun');
+  document.querySelectorAll('.bottom .nav').forEach(btn=>btn.classList.toggle('active',btn.dataset.nav==='Akun'));
   josPortalTab('customer');
   await josShowRole(resolved,'customer');
  }catch(err){
