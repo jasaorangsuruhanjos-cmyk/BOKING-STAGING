@@ -769,7 +769,7 @@ body.jos-order-open .bottom{display:none!important}
 <div class="toast" id="toast"></div>
 <section class="portal-layer" id="josPortalCustomer"><div class="portal-wrap">
 <div class="portal-top"><h2>👤 Akun JOS Pelanggan</h2></div>
-<div class="portal-card" id="josCustomerAuthBox"><h3 id="josCustomerAuthTitle">Login Pelanggan</h3><form id="josCustomerAuthForm"><div class="hidden" id="josCustomerNameWrap"><label>Nama lengkap</label><input autocomplete="name" id="josCustomerRegName"/></div><label>Email</label><input autocomplete="email" id="josCustomerEmail" required="" type="email"/><label>Password</label><input id="josCustomerPassword" minlength="8" required="" type="password"/><div class="hidden" id="josCustomerWaWrap"><label>Nomor WhatsApp</label><input id="josCustomerWA" placeholder="08xxxxxxxxxx" type="tel"/></div><button type="submit" class="portal-submit" id="josCustomerAuthSubmit">Login Pelanggan</button></form><p><a href="#" id="josCustomerToggleAuth">Belum punya akun? Daftar pelanggan</a></p><div class="portal-msg" id="josCustomerAuthMsg" role="status"></div><div class="auth-recovery-actions"><div id="josCustomerResendCountdown" class="portal-msg" hidden></div><button type="button" id="josCustomerResendVerify" class="portal-submit" style="margin-top:8px" hidden disabled>Kirim ulang email verifikasi</button><button type="button" id="josCustomerResetPassword" class="portal-submit" style="margin-top:8px;background:#64748b">Lupa password?</button></div></div>
+<div class="portal-card" id="josCustomerAuthBox"><h3 id="josCustomerAuthTitle">Login Pelanggan</h3><form id="josCustomerAuthForm"><div class="hidden" id="josCustomerNameWrap"><label>Nama lengkap</label><input autocomplete="name" id="josCustomerRegName"/></div><label>Email</label><input autocomplete="email" id="josCustomerEmail" required="" type="email"/><label>Password</label><input id="josCustomerPassword" minlength="8" required="" type="password"/><div class="hidden" id="josCustomerWaWrap"><label>Nomor WhatsApp</label><input id="josCustomerWA" placeholder="08xxxxxxxxxx" type="tel"/></div><button type="submit" class="portal-submit" id="josCustomerAuthSubmit">Login Pelanggan</button><button type="button" class="portal-submit" id="josCustomerGoogleLogin" style="margin-top:9px;background:#fff;color:#263238;border:1px solid #d5e0e8">🌐 Masuk dengan Google</button></form><p><a href="#" id="josCustomerToggleAuth">Belum punya akun? Daftar pelanggan</a></p><div class="portal-msg" id="josCustomerAuthMsg" role="status"></div><div class="auth-recovery-actions"><div id="josCustomerResendCountdown" class="portal-msg" hidden></div><button type="button" id="josCustomerResendVerify" class="portal-submit" style="margin-top:8px" hidden disabled>Kirim ulang email verifikasi</button><button type="button" id="josCustomerResetPassword" class="portal-submit" style="margin-top:8px;background:#64748b">Lupa password?</button></div></div>
 </div>
 <div class="portal-card hidden" id="josMitraAuthBox"><h3 id="josMitraAuthTitle">Login Mitra</h3><form id="josMitraAuthForm"><div class="hidden" id="josMitraNameWrap"><label>Nama lengkap</label><input id="josMitraRegName"/></div><label>Email</label><input id="josMitraEmail" required="" type="email"/><label>Password</label><input id="josMitraPassword" minlength="8" required="" type="password"/><button type="submit" class="portal-submit">Login Mitra</button></form><p class="portal-note">Mitra dapat mendaftar dengan email. Setelah verifikasi email, lengkapi profil dan tunggu persetujuan Admin JOS.</p><p><a href="#" id="josMitraToggleAuth">Belum punya akun? Daftar mitra</a></p><div class="portal-msg" id="josMitraAuthMsg" role="status"></div><div class="auth-recovery-actions"><button type="button" id="josMitraResendVerify" class="portal-submit" style="margin-top:8px">Kirim ulang email verifikasi</button><button type="button" id="josMitraResetPassword" class="portal-submit" style="margin-top:8px;background:#64748b">Lupa password?</button></div></div>
 <div class="portal-card hidden" id="josAdminAuthBox"><h3>Login Khusus Admin</h3><form id="josAdminAuthForm"><label>Email admin</label><input id="josAdminEmail" required="" type="email"/><label>Password</label><input id="josAdminPassword" required="" type="password"/><button type="submit" class="portal-submit">Masuk Portal Admin</button></form><div class="portal-msg" id="josAdminAuthMsg" role="status">Akses admin hanya diberikan kepada akun yang sudah terdaftar sebagai admin di database.</div></div>
@@ -897,7 +897,6 @@ let recommendationAutoTimer=setInterval(()=>{
     recommendationTrack.scrollBy({left:step,behavior:'smooth'});
   }
 },8000);
-
 
 function rupiah(n){return 'Rp'+Math.round(n).toLocaleString('id-ID')}
 function josGetOrderPricing(option, mitraCount){
@@ -1556,6 +1555,7 @@ function josToggleForm(kind){
     josEl('josCustomerNameWrap')?.classList.toggle('hidden',!josCustomerSignup);
     josEl('josCustomerWaWrap')?.classList.toggle('hidden',!josCustomerSignup);
     josEl('josCustomerAuthTitle').textContent=josCustomerSignup?'Daftar Pelanggan':'Login Pelanggan';
+    josEl('josCustomerGoogleLogin').hidden=josCustomerSignup;
     josEl('josCustomerAuthSubmit').textContent=josCustomerSignup?'Buat Akun Pelanggan':'Login Pelanggan';
     josEl('josCustomerToggleAuth').textContent=josCustomerSignup?'Sudah punya akun? Login':'Belum punya akun? Daftar pelanggan';
     josMsg('josCustomerAuthMsg','');
@@ -1595,12 +1595,7 @@ async function josCustomerSubmit(e){
       }});
       if(error)throw error;
       josMsg('josCustomerAuthMsg',data.session?'Akun pelanggan berhasil dibuat dan sudah login.':'Pendaftaran berhasil.\nBuka email yang digunakan saat mendaftar.\nPeriksa folder Spam jika email verifikasi tidak ada di Inbox.');
-      if(data.session){
-        await josShowRole(data.user,'customer');
-      }else{
-        alert('PENDAFTARAN BERHASIL!\n\nEmail verifikasi JOS sedang diproses. Periksa Inbox, lalu folder Spam atau Promotions jika belum terlihat. Pastikan alamat email yang digunakan saat mendaftar sudah benar.\n\nJika email belum masuk beberapa menit, gunakan tombol Kirim ulang email verifikasi.');
-        josStartCustomerResendCountdown();
-      }
+      if(data.session)await josShowRole(data.user,'customer');else josStartCustomerResendCountdown();
     }else{
       const {data,error}=await josDb.auth.signInWithPassword({email,password});
       if(error)throw error;
@@ -1614,6 +1609,41 @@ async function josCustomerSubmit(e){
   finally{josBusy('josCustomerAuthForm',false);}
 }
 josEl('josCustomerAuthForm').onsubmit=josCustomerSubmit;
+
+async function josCustomerGoogleSignIn(){
+ try{
+  josEl('josCustomerGoogleLogin').disabled=true;
+  josMsg('josCustomerAuthMsg','Menghubungkan ke Google...');
+  const {error}=await josDb.auth.signInWithOAuth({
+   provider:'google',
+   options:{redirectTo:location.origin+location.pathname+'#akun'}
+  });
+  if(error)throw error;
+ }catch(err){
+  josMsg('josCustomerAuthMsg','Login Google gagal: '+(err.message||'Silakan coba lagi.'),true);
+  josEl('josCustomerGoogleLogin').disabled=false;
+ }
+}
+josEl('josCustomerGoogleLogin').onclick=josCustomerGoogleSignIn;
+(async()=>{
+ const params=new URLSearchParams(location.search);
+ if(!params.has('code'))return;
+ try{
+  const {data,error}=await josDb.auth.exchangeCodeForSession(params.get('code'));
+  if(error)throw error;
+  if(!data?.user)throw Error('Sesi Google tidak ditemukan.');
+  const {data:updated,error:updateError}=await josDb.auth.updateUser({data:{
+   ...(data.user.user_metadata||{}),account_type:'customer',app_brand:'JOS'
+  }});
+  if(updateError)throw updateError;
+  history.replaceState(null,'',location.pathname+location.hash);
+  josPortalTab('customer');
+  await josShowRole(updated.user||data.user,'customer');
+ }catch(err){
+  josMsg('josCustomerAuthMsg','Verifikasi login Google gagal: '+err.message,true);
+ }
+})();
+
 
 // Bantuan verifikasi dan pemulihan akun tanpa mengubah/menghapus akun yang sudah ada.
 async function josResendVerification(kind){
@@ -1802,8 +1832,7 @@ async function josLoadCustomerProfile(user){
  josEl('josCustomerProfileName').value=m.full_name||'';
  josEl('josCustomerProfileAddress').value=m.address||'';
  josEl('josCustomerProfileWA').value=m.phone||'';
- josEl('josCustomerProfileEmail').value=user.email||'';
- const guestPanel=josEl('josGuestAccountPanel');
+ josEl('josCustomerProfileEmail').value=user.email||''; const guestPanel=josEl('josGuestAccountPanel');
  const secureNote=josEl('josCustomerAccountSecureNote');
  if(guestPanel)guestPanel.hidden=!user.is_anonymous;
  if(secureNote)secureNote.hidden=true;
@@ -2702,8 +2731,7 @@ josLoadCustomerOrders=async function(){
     <p class="jos-open-desc">Aplikasi JOS sudah siap digunakan. Tekan tombol di bawah untuk membuka JOS.</p>
     <button type="button" class="jos-open-action" id="josInstalledOpenNow">Buka Aplikasi JOS</button>
   </div>
-</div>
-<script id="jos-installed-open-popup-script">
+</div><script id="jos-installed-open-popup-script">
 (function(){
   const popup=document.getElementById('josInstalledOpenPopup');
   const close=document.getElementById('josInstalledOpenClose');
