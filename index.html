@@ -1619,8 +1619,8 @@ async function josResolveGoogleCustomer(user){
  if(currentRole==='customer') return user;
  if(currentRole && currentRole!=='customer') return null;
  const [{data:adminRow,error:adminError},{data:mitraRow,error:mitraError}]=await Promise.all([
-  josAdminDb.from('jos_admin_users').select('user_id').eq('user_id',user.id).maybeSingle(),
-  josMitraDb.from('jos_mitra_profiles').select('id').eq('id',user.id).maybeSingle()
+  josDb.from('jos_admin_users').select('user_id').eq('user_id',user.id).maybeSingle(),
+  josDb.from('jos_mitra_profiles').select('id').eq('id',user.id).maybeSingle()
  ]);
  if(adminError) throw adminError;
  if(mitraError) throw mitraError;
@@ -1659,13 +1659,11 @@ josEl('josCustomerGoogleLogin').onclick=josCustomerGoogleSignIn;
   const {data,error}=await josDb.auth.exchangeCodeForSession(params.get('code'));
   if(error)throw error;
   if(!data?.user)throw Error('Sesi Google tidak ditemukan.');
-  const {data:updated,error:updateError}=await josDb.auth.updateUser({data:{
-   ...(data.user.user_metadata||{}),account_type:'customer',app_brand:'JOS'
-  }});
-  if(updateError)throw updateError;
+  const resolved=await josResolveGoogleCustomer(data.user);
+  if(!resolved)throw Error('Akun Google ini sudah terdaftar sebagai Mitra/Admin atau bukan akun pelanggan JOS.');
   history.replaceState(null,'',location.pathname+location.hash);
   josPortalTab('customer');
-  await josShowRole(updated.user||data.user,'customer');
+  await josShowRole(resolved,'customer');
  }catch(err){
   josMsg('josCustomerAuthMsg','Verifikasi login Google gagal: '+err.message,true);
  }
