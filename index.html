@@ -1649,26 +1649,50 @@ async function josCustomerGoogleSignIn(){
  }
 }
 josEl('josCustomerGoogleLogin').onclick=josCustomerGoogleSignIn;
-let josGoogleOAuthCompleting=new URLSearchParams(location.search).has('code');
+let josGoogleOAuthCompleting=!!(new URLSearchParams(location.search).has('code') || /(?:^|[&#])access_token=/.test(location.hash));
 (async()=>{
  const params=new URLSearchParams(location.search);
- if(!params.has('code'))return;
+ const hashParams=new URLSearchParams(location.hash.replace(/^#/,''));
+ const oauthError=params.get('error_description')||params.get('error')||hashParams.get('error_description')||hashParams.get('error');
+ if(oauthError){
+  josMsg('josCustomerAuthMsg','Login Google ditolak: '+oauthError,true);
+  josGoogleOAuthCompleting=false;
+  return;
+ }
+ if(!josGoogleOAuthCompleting)return;
  try{
-  const {data,error}=await josDb.auth.exchangeCodeForSession(params.get('code'));
-  if(error)throw error;
-  if(!data?.user)throw Error('Sesi Google tidak ditemukan.');
-  const resolved=await josResolveGoogleCustomer(data.user);
-  if(!resolved)throw Error('Akun Google ini sudah terdaftar sebagai Mitra/Admin atau bukan akun pelanggan JOS.');
-  history.replaceState(null,'',location.pathname+'#akun');
-  // OAuth kembali dari Google harus membuka panel Akun, bukan hanya mengganti isi panel yang tertutup.
+  let user=null;
+  if(params.has('code')){
+   const {data,error}=await josDb.auth.exchangeCodeForSession(params.get('code'));
+   if(error)throw error;
+   user=data?.user||data?.session?.user||null;
+  }else{
+   const access_token=hashParams.get('access_token');
+   const refresh_token=hashParams.get('refresh_token');
+   if(access_token&&refresh_token){
+    const {data,error}=await josDb.auth.setSession({access_token,refresh_token});
+    if(error)throw error;
+    user=data?.user||data?.session?.user||null;
+   }
+  }
+  if(!user){
+   const {data,error}=await josDb.auth.getUser();
+   if(error)throw error;
+   user=data?.user||null;
+  }
+  if(!user)throw Error('Google kembali ke aplikasi, tetapi sesi Supabase tidak ditemukan. Periksa URL Redirect Google di Supabase.');
+  const resolved=await josResolveGoogleCustomer(user);
+  if(!resolved)throw Error('Akun Google ini memiliki jenis akun atau aplikasi berbeda dan tidak dapat dibuka sebagai pelanggan JOS.');
+  history.replaceState(null,'',location.pathname+location.search.split('?')[0]+'#akun');
   document.querySelectorAll('.portal-layer').forEach(x=>x.classList.remove('open'));
   josEl('josPortalCustomer')?.classList.add('open');
   if(typeof setJosPageStatus==='function')setJosPageStatus('Akun');
   document.querySelectorAll('.bottom .nav').forEach(btn=>btn.classList.toggle('active',btn.dataset.nav==='Akun'));
   josPortalTab('customer');
   await josShowRole(resolved,'customer');
+  josMsg('josCustomerAuthMsg','Login Google berhasil. Profil pelanggan JOS sudah dibuka.');
  }catch(err){
-  josMsg('josCustomerAuthMsg','Verifikasi login Google gagal: '+err.message,true);
+  josMsg('josCustomerAuthMsg','Login Google belum selesai: '+(err.message||'Kesalahan tidak diketahui.'),true);
  }finally{
   josGoogleOAuthCompleting=false;
  }
