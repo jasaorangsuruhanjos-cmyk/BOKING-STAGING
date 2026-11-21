@@ -1472,6 +1472,9 @@ const josDb=window.supabase.createClient(
   {auth:{
     persistSession:true,
     autoRefreshToken:true,
+    // Google OAuth memakai implicit callback agar tidak bergantung pada PKCE verifier
+    // yang dapat hilang ketika Android berpindah antara browser dan aplikasi.
+    flowType:'implicit',
     detectSessionInUrl:false,
     // Sesi halaman utama hanya untuk pelanggan; tidak berbagi storage dengan portal mitra.
     storageKey:'jos-customer-auth'
