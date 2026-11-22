@@ -80,53 +80,48 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Prepare centered JOS icon and ONE native splash screen
+      - name: Prepare exact original JOS logo for icon and ONE native splash
         run: |
           set -euo pipefail
           mkdir -p assets
-          python3 -m pip install --quiet Pillow CairoSVG
+          python3 -m pip install --quiet Pillow
           python3 - <<'PY'
           from PIL import Image, ImageFilter
-          import cairosvg
-          # Render the approved vector master at high resolution so the Android
-          # splash is crisp; no low-resolution raster logo is enlarged.
-          cairosvg.svg2png(url='resources/jos-logo-hd.svg',
-                           write_to='assets/jos-logo-hd.png',
-                           output_width=2400, output_height=2400)
-          source=Image.open('assets/jos-logo-hd.png').convert('RGBA')
+          from pathlib import Path
+
+          # Source of truth: existing official JOS 512px PNG from the customer site.
+          # Do not redraw, trace, retype, recolor, or substitute the logo.
+          source=Image.open('jos-icon-512.png').convert('RGBA')
           source.load()
-          if source.size != (2400,2400):
-              raise SystemExit(f'Unexpected JOS vector render dimensions: {source.size}')
-          blue=(169,215,242,255)
-          # Keep the whole original JOS artwork inside Android's adaptive-icon safe zone.
-          # Full-bleed (1024px) is clipped by launcher's circular/squircle mask; 660px
-          # looked too small. 660px keeps all artwork inside the adaptive-icon mask safe area.
-          icon=Image.new('RGBA',(1024,1024),blue)
-          # Use the full-resolution vector render directly for splash generation.
-          master=source.filter(ImageFilter.UnsharpMask(radius=1.2,percent=45,threshold=3))
-          mark=master.resize((660,660),Image.Resampling.LANCZOS)
-          mark=mark.filter(ImageFilter.UnsharpMask(radius=1.1,percent=70,threshold=2))
-          icon.alpha_composite(mark,((1024-mark.width)//2,(1024-mark.height)//2))
+          if source.size != (512,512):
+              raise SystemExit(f'Expected original JOS logo 512x512, got {source.size}')
+
+          # Legacy launcher image: same original artwork, no crop and no distortion.
+          icon=source.resize((1024,1024),Image.Resampling.LANCZOS)
           icon.save('assets/icon-only.png',format='PNG',optimize=True)
-          # Transparent foreground with same scale: no extra inset is added downstream.
+
+          # Adaptive foreground: keep the complete square source inside the safe zone.
           foreground=Image.new('RGBA',(1024,1024),(0,0,0,0))
-          foreground.alpha_composite(mark,((1024-mark.width)//2,(1024-mark.height)//2))
+          mark=source.resize((760,760),Image.Resampling.LANCZOS)
+          foreground.alpha_composite(mark,((1024-760)//2,(1024-760)//2))
           foreground.save('assets/icon-foreground.png',format='PNG',optimize=True)
-          Image.new('RGBA',(1024,1024),blue).save('assets/icon-background.png',format='PNG',optimize=True)
-          bbox=foreground.getbbox()
-          if not bbox or bbox[0] < 95 or bbox[1] < 95 or bbox[2] > 929 or bbox[3] > 929:
-              raise SystemExit(f'JOS foreground escaped safe zone: {bbox}')
-          print(f'Launcher artwork safely centered at {mark.size}, alpha bounds {bbox}.')
-          # Single Android system splash: one blue canvas and one centered, uncropped logo.
-          splash=Image.new('RGBA',(2732,2732),blue)
-          # Use the full-resolution 2400px vector render for the splash; preserve every edge.
-          mark=master.copy()
-          mark.thumbnail((1900,1900),Image.Resampling.LANCZOS)
-          mark=mark.filter(ImageFilter.UnsharpMask(radius=1.5,percent=90,threshold=2))
-          splash.alpha_composite(mark,((2732-mark.width)//2,(2732-mark.height)//2))
-          splash.save('assets/splash.png',format='PNG',optimize=True)
-          splash.save('assets/splash-dark.png',format='PNG',optimize=True)
-          print('Created centered safe-area launcher icon and one native splash image.')
+          # Match outer adaptive background to the official logo's light-blue edge.
+          Image.new('RGBA',(1024,1024),(169,215,242,255)).save(
+              'assets/icon-background.png',format='PNG',optimize=True)
+
+          # Single native splash image, based on the exact original PNG.
+          # Upscaling only; no generated vector artwork or replacement lettering.
+          master=source.resize((2732,2732),Image.Resampling.LANCZOS)
+          # Very light sharpening offsets raster scaling without changing contours.
+          master=master.filter(ImageFilter.UnsharpMask(radius=1.0,percent=35,threshold=4))
+          master.save('assets/splash.png',format='PNG',optimize=True)
+          master.save('assets/splash-dark.png',format='PNG',optimize=True)
+
+          # Confirm splash remains a full, undistorted 1:1 copy of the source composition.
+          if master.size != (2732,2732):
+              raise SystemExit('JOS splash generation size check failed')
+          print('Branding source: jos-icon-512.png (official original).')
+          print('Generated one full-frame splash; original artwork composition preserved.')
           PY
           npx capacitor-assets generate --android
 
