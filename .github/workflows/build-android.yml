@@ -78,7 +78,7 @@ jobs:
           """
           m=re.search(r'<body[^>]*>',html,re.I)
           if not m: raise SystemExit('BODY tag not found')
-          html=html[:m.end()]+'\\n'+overlay+'\\n'+html[m.end():]
+          html=html[:m.end()]+'\n'+overlay+'\n'+html[m.end():]
           if html.count('id="jos-app-launch-screen"')!=1:
               raise SystemExit('Expected exactly one full-screen JOS launch image')
           p.write_text(html,encoding='utf-8')
