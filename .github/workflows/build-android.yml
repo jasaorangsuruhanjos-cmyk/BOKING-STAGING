@@ -37,7 +37,7 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Package actual JOS customer web app
+      - name: Package JOS customer app without a second web splash
         run: |
           set -euo pipefail
           mkdir -p www
@@ -47,42 +47,11 @@ jobs:
           from pathlib import Path
           p=Path("www/index.html")
           html=p.read_text(encoding="utf-8")
-          overlay=r"""
-          <style id="jos-native-fullscreen-splash-style">
-          #jos-native-fullscreen-splash{position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;overflow:hidden;background:linear-gradient(145deg,#c9edfa 0%,#a9d7f2 48%,#78b6e8 100%);opacity:1;transition:opacity .4s ease}
-          #jos-native-fullscreen-splash img{display:block;width:92vw;max-width:720px;max-height:68vh;object-fit:contain;filter:drop-shadow(0 10px 18px rgba(7,46,105,.12))}
-          #jos-native-fullscreen-splash.jos-fade{opacity:0;pointer-events:none}
-          @media(prefers-reduced-motion:reduce){#jos-native-fullscreen-splash{transition:none}}
-          </style>
-          <div id="jos-native-fullscreen-splash" aria-label="JOS Jasa Orang Suruhan">
-            <img src="jos-native-splash.png" alt="JOS Jasa Orang Suruhan">
-          </div>
-          <script id="jos-native-splash-dismiss">
-          (function(){
-            const cap=window.Capacitor;
-            const native=!!(cap&&cap.isNativePlatform&&cap.isNativePlatform());
-            if(!native)return;
-            const overlay=document.getElementById('jos-native-fullscreen-splash');
-            if(overlay)overlay.style.display='flex';
-            let done=false;
-            async function dismiss(){
-              if(done)return;done=true;
-              if(overlay){overlay.classList.add('jos-fade');setTimeout(()=>overlay.remove(),450);}
-              try{const splash=cap.Plugins&&cap.Plugins.SplashScreen;if(splash&&splash.hide)await splash.hide({fadeOutDuration:350});}catch(error){console.warn('JOS native splash:',error);}
-            }
-            window.addEventListener('load',()=>setTimeout(dismiss,2200),{once:true});
-            setTimeout(dismiss,10000);
-          })();
-          </script>
-          """
-          if 'jos-native-fullscreen-splash' not in html:
-              if '</body>' in html:
-                  html=html.replace('</body>',overlay+'\n</body>',1)
-              else:
-                  html += overlay
-          p.write_text(html,encoding="utf-8")
+          for marker in ("jos-native-fullscreen-splash", "jos-native-splash-dismiss"):
+              if marker in html:
+                  raise SystemExit(f"Duplicate web splash marker found in source: {marker}")
           if p.stat().st_size < 500000:
-              raise SystemExit("Bundled customer app unexpectedly small; refusing empty/placeholder web bundle.")
+              raise SystemExit("Bundled customer app unexpectedly small.")
           PY
 
       - name: Install Capacitor
@@ -125,56 +94,44 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p assets
-          python3 -m pip install --quiet Pillow numpy
+          python3 -m pip install --quiet Pillow
           python3 - <<'PY'
           from PIL import Image
-          from pathlib import Path
+          from statistics import median
           source=Image.open('resources/jos-logo-source.jpg').convert('RGB')
-          source.load()  # Fail if the uploaded source image is incomplete or corrupt.
-          if source.size not in ((256,256),(512,512),(1024,1024)):
-              raise SystemExit(f"Unexpected source logo dimensions: {source.size}")
-          source=source.resize((1024,1024),Image.Resampling.LANCZOS)
-          # Keep the full JOS wordmark large and centered. Use one full-bleed brand colour.
-          import numpy as np
-          source=Image.open('resources/jos-logo-source.jpg').convert('RGB')
-          arr=np.asarray(source)
-          # Crop plain background margins so the JOS worker, roof and wordmark occupy the screen.
-          corner=np.concatenate([arr[:12,:12].reshape(-1,3),arr[:12,-12:].reshape(-1,3),arr[-12:,:12].reshape(-1,3),arr[-12:,-12:].reshape(-1,3)])
-          bg=np.median(corner,axis=0)
-          mask=np.max(np.abs(arr.astype('int16')-bg.astype('int16')),axis=2)>28
-          ys,xs=np.where(mask)
-          if len(xs)>20:
-              pad=max(3,int(max(xs.max()-xs.min(),ys.max()-ys.min())*.06))
-              box=(max(0,int(xs.min())-pad),max(0,int(ys.min())-pad),min(source.width,int(xs.max())+pad+1),min(source.height,int(ys.max())+pad+1))
-              logo=source.crop(box)
-          else:
-              logo=source.copy()
-          # A clean square launcher canvas, using the JOS light-blue brand background.
-          icon=Image.new('RGB',(1024,1024),(169,215,242))
-          icon_logo=logo.copy()
-          icon_logo.thumbnail((960,960),Image.Resampling.LANCZOS)
-          icon.paste(icon_logo,((1024-icon_logo.width)//2,(1024-icon_logo.height)//2))
-          icon.save('assets/icon-only.png',format='PNG',optimize=True)
-          foreground=Image.new('RGBA',(1024,1024),(0,0,0,0))
-          fg=logo.copy()
-          fg.thumbnail((760,760),Image.Resampling.LANCZOS)
-          foreground.alpha_composite(fg.convert('RGBA'),((1024-fg.width)//2,(1024-fg.height)//2))
-          foreground.save('assets/icon-foreground.png',format='PNG',optimize=True)
-          Image.new('RGBA',(1024,1024),(169,215,242,255)).save('assets/icon-background.png',format='PNG',optimize=True)
-          # Native splash artwork uses full-bleed brand colour; logo is oversized and centered.
+          source.load()
+          if source.width < 128 or source.height < 128:
+              raise SystemExit(f"Source logo too small: {source.size}")
+          sample=[source.getpixel(p) for p in [(2,2),(source.width-3,2),(2,source.height-3),(source.width-3,source.height-3)]]
+          bg=tuple(int(median([p[c] for p in sample])) for c in range(3))
+          pixels=source.load(); xs=[]; ys=[]
+          for y in range(source.height):
+              for x in range(source.width):
+                  px=pixels[x,y]
+                  if max(abs(px[c]-bg[c]) for c in range(3)) > 24:
+                      xs.append(x); ys.append(y)
+          if len(xs) < 100:
+              raise SystemExit("Could not detect JOS logo artwork reliably.")
+          span=max(max(xs)-min(xs),max(ys)-min(ys)); pad=max(4,int(span*.045))
+          box=(max(0,min(xs)-pad),max(0,min(ys)-pad),min(source.width,max(xs)+pad+1),min(source.height,max(ys)+pad+1))
+          logo=source.crop(box)
+          if logo.width < source.width*.35 and logo.height < source.height*.35:
+              raise SystemExit(f"Suspiciously small logo crop: {logo.size} from {source.size}")
+          print(f"JOS logo crop: {source.size} -> {logo.size}")
           splash=Image.new('RGBA',(2732,2732),(169,215,242,255))
-          splash_logo=logo.copy()
-          splash_logo.thumbnail((2580,2580),Image.Resampling.LANCZOS)
+          splash_logo=logo.copy(); splash_logo.thumbnail((2520,1800),Image.Resampling.LANCZOS)
           splash.alpha_composite(splash_logo.convert('RGBA'),((2732-splash_logo.width)//2,(2732-splash_logo.height)//2))
           splash.save('assets/splash.png',format='PNG',optimize=True)
           splash.save('assets/splash-dark.png',format='PNG',optimize=True)
-          # Full-screen 9:16 launch image. The logo fills most of the screen width.
-          screen=Image.new('RGB',(1080,1920),(169,215,242))
-          screen_logo=logo.copy()
-          screen_logo.thumbnail((1040,1160),Image.Resampling.LANCZOS)
-          screen.paste(screen_logo,((1080-screen_logo.width)//2,(1920-screen_logo.height)//2))
-          screen.save('www/jos-native-splash.png',format='PNG',optimize=True)
-          print('JOS full-screen splash generated; tight artwork crop:',logo.size)
+          icon=Image.new('RGB',(1024,1024),(169,215,242))
+          icon_logo=logo.copy(); icon_logo.thumbnail((900,900),Image.Resampling.LANCZOS)
+          icon.paste(icon_logo,((1024-icon_logo.width)//2,(1024-icon_logo.height)//2))
+          icon.save('assets/icon-only.png',format='PNG',optimize=True)
+          foreground=Image.new('RGBA',(1024,1024),(0,0,0,0))
+          fg=logo.copy(); fg.thumbnail((760,760),Image.Resampling.LANCZOS)
+          foreground.alpha_composite(fg.convert('RGBA'),((1024-fg.width)//2,(1024-fg.height)//2))
+          foreground.save('assets/icon-foreground.png',format='PNG',optimize=True)
+          Image.new('RGBA',(1024,1024),(169,215,242,255)).save('assets/icon-background.png',format='PNG',optimize=True)
           PY
           npx capacitor-assets generate --android
 
@@ -231,7 +188,6 @@ jobs:
         run: |
           test -s www/index.html
           grep -q "Jasa Orang Suruhan" www/index.html
-          grep -q "jos-native-splash-dismiss" www/index.html
           test "$(wc -c < www/index.html)" -gt 500000
 
       - name: Build debug APK
