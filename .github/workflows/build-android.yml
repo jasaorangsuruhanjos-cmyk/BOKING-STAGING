@@ -94,12 +94,13 @@ jobs:
           from PIL import Image, ImageFilter
           from pathlib import Path
 
-          # Source of truth: existing official JOS 512px PNG from the customer site.
-          # Do not redraw, trace, retype, recolor, or substitute the logo.
-          source=Image.open('jos-icon-512.png').convert('RGBA')
+          # Source of truth: the latest white-background JOS artwork supplied for
+          # the Android icon and splash. Never fall back to the older blue-gradient PWA icon.
+          # Keep the full square artwork intact; no crop, redraw, recolor, or retyping.
+          source=Image.open('resources/jos-logo-source.webp').convert('RGBA')
           source.load()
-          if source.size != (512,512):
-              raise SystemExit(f'Expected original JOS logo 512x512, got {source.size}')
+          if source.width != source.height:
+              raise SystemExit(f'Expected square latest JOS artwork, got {source.size}')
 
           # Legacy launcher image: same original artwork, no crop and no distortion.
           icon=source.resize((1024,1024),Image.Resampling.LANCZOS)
@@ -128,7 +129,7 @@ jobs:
           # Confirm splash remains a full, undistorted 1:1 copy of the source composition.
           if master.size != (2732,2732):
               raise SystemExit('JOS splash generation size check failed')
-          print('Launcher icon source: jos-icon-512.png.')
+          print('Launcher icon and splash source: latest white-background resources/jos-logo-source.webp.')
           print('Splash source: clean square resources/jos-logo-source.webp; bottom black strip excluded.')
           print('Generated one full-frame splash composition; original artwork preserved.')
           PY
