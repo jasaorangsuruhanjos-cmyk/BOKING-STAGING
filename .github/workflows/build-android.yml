@@ -19,7 +19,6 @@ on:
 permissions:
   contents: write
 
-# Only the newest staging commit may publish the downloadable APK.
 concurrency:
   group: jos-android-staging-${{ github.ref }}
   cancel-in-progress: true
@@ -42,7 +41,7 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Package customer website without duplicate splash overlays
+      - name: Package customer website
         run: |
           set -euo pipefail
           mkdir -p www
@@ -57,6 +56,7 @@ jobs:
 
       - name: Configure native deep link callback
         run: |
+          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           import re
@@ -85,65 +85,60 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Prepare exact original JOS logo for icon and ONE native splash
+      - name: Prepare the exact approved JOS logo for Android icon and splash
         run: |
           set -euo pipefail
           mkdir -p assets
           python3 -m pip install --quiet Pillow
           python3 - <<'PY'
-          from PIL import Image, ImageFilter
+          from PIL import Image
           from pathlib import Path
 
-          # Source of truth: the latest white-background JOS artwork supplied for
-          # the Android icon and splash. Never fall back to the older blue-gradient PWA icon.
-          # Keep the full square artwork intact; no crop, redraw, recolor, or retyping.
-          source=Image.open('resources/jos-logo-source.webp').convert('RGBA')
+          # Single source of truth: this is the exact 512x512 JOS artwork
+          # previously approved by the owner for the Android app icon and splash.
+          # Do not use resources/jos-logo-source.webp: it is an older, incorrect logo.
+          source_path=Path('jos-icon-512.png')
+          source=Image.open(source_path).convert('RGBA')
           source.load()
-          if source.width != source.height:
-              raise SystemExit(f'Expected square latest JOS artwork, got {source.size}')
+          if source.size != (512,512):
+              raise SystemExit(f'Approved JOS logo must remain 512x512, got {source.size}')
 
-          # Legacy launcher image: same original artwork, no crop and no distortion.
+          # Preserve the approved square artwork, including its complete margins.
+          # No crop, redraw, recolor, retyping, or aspect-ratio change.
           icon=source.resize((1024,1024),Image.Resampling.LANCZOS)
           icon.save('assets/icon-only.png',format='PNG',optimize=True)
 
-          # Adaptive foreground: keep the complete square source inside the safe zone.
+          # Adaptive icon: inset the complete square artwork so the technician,
+          # wrench, roof, JOS lettering, and tagline remain inside the Android mask.
           foreground=Image.new('RGBA',(1024,1024),(0,0,0,0))
-          mark=source.resize((680,680),Image.Resampling.LANCZOS)
+          mark=source.resize((760,760),Image.Resampling.LANCZOS)
           foreground.alpha_composite(mark,((1024-760)//2,(1024-760)//2))
           foreground.save('assets/icon-foreground.png',format='PNG',optimize=True)
-          # Match outer adaptive background to the official logo's light-blue edge.
-          Image.new('RGBA',(1024,1024),(169,215,242,255)).save(
+          Image.new('RGBA',(1024,1024),(255,255,255,255)).save(
               'assets/icon-background.png',format='PNG',optimize=True)
 
-          # Single native splash: use the clean square JOS logo artwork supplied in resources.
-          # This composition matches the requested splash panel and has no black strip at the bottom.
-          splash_source=Image.open('resources/jos-logo-source.webp').convert('RGBA')
-          if splash_source.width != splash_source.height:
-              raise SystemExit(f'Expected square JOS splash artwork, got {splash_source.size}')
-          master=splash_source.resize((2732,2732),Image.Resampling.LANCZOS)
-          # Gentle sharpening after upscale; preserve original logo, lettering and proportions.
-          master=master.filter(ImageFilter.UnsharpMask(radius=1.0,percent=45,threshold=3))
-          master.save('assets/splash.png',format='PNG',optimize=True)
-          master.save('assets/splash-dark.png',format='PNG',optimize=True)
+          # Splash uses the same exact approved logo, centered on white.
+          # Keep the complete square canvas; do not crop or enlarge past its bounds.
+          splash=source.resize((2732,2732),Image.Resampling.LANCZOS)
+          splash.save('assets/splash.png',format='PNG',optimize=True)
+          splash.save('assets/splash-dark.png',format='PNG',optimize=True)
 
-          # Confirm splash remains a full, undistorted 1:1 copy of the source composition.
-          if master.size != (2732,2732):
-              raise SystemExit('JOS splash generation size check failed')
-          print('Launcher icon and splash source: latest white-background resources/jos-logo-source.webp.')
-          print('Splash source: clean square resources/jos-logo-source.webp; bottom black strip excluded.')
-          print('Generated one full-frame splash composition; original artwork preserved.')
+          # Verify that the image used is the approved repository icon itself.
+          if source.size != (512,512) or splash.size != (2732,2732):
+              raise SystemExit('JOS branding asset validation failed')
+          print('Android icon and splash now use jos-icon-512.png (approved original).')
+          print('Splash is square, white-background, full-frame, and uncropped.')
           PY
           npx capacitor-assets generate --android
 
       - name: Sync native project
         run: npx cap sync android
 
-      - name: Force JOS launcher icons into Android resources
+      - name: Force approved JOS launcher icons into Android resources
         run: |
           python3 - <<'PY'
           from pathlib import Path
           from PIL import Image
-          import xml.etree.ElementTree as ET
           import re
           source=Image.open('assets/icon-only.png').convert('RGBA')
           foreground_source=Image.open('assets/icon-foreground.png').convert('RGBA')
@@ -154,12 +149,11 @@ jobs:
               icon=source.resize((size,size),Image.Resampling.LANCZOS)
               icon.save(d/'ic_launcher.png',optimize=True)
               icon.save(d/'ic_launcher_round.png',optimize=True)
-              # Keep the foreground artwork safely inset; keep technician, lettering, roof and base fully inside adaptive mask.
               fg=foreground_source.resize((size,size),Image.Resampling.LANCZOS)
               fg.save(d/'ic_launcher_foreground.png',optimize=True)
           values=root/'values'; values.mkdir(parents=True,exist_ok=True)
-          colors=values/'jos_launcher_colors.xml'
-          colors.write_text('''<resources><color name="jos_launcher_background">#A9D7F2</color></resources>''')
+          (values/'jos_launcher_colors.xml').write_text(
+              '<resources><color name="jos_launcher_background">#FFFFFF</color></resources>')
           manifest=Path('android/app/src/main/AndroidManifest.xml')
           text=manifest.read_text()
           start=text.find('<application')
@@ -170,19 +164,18 @@ jobs:
           tag=re.sub(r'android:roundIcon="[^"]+"','',tag)
           tag=tag[:-1]+' android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round">'
           manifest.write_text(text[:start]+tag+text[end+1:])
-          print("Android application manifest explicitly points to the JOS launcher icons")
           adaptive=root/'mipmap-anydpi-v26'; adaptive.mkdir(parents=True,exist_ok=True)
           xml='''<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/jos_launcher_background"/><foreground android:drawable="@mipmap/ic_launcher_foreground"/></adaptive-icon>'''
           (adaptive/'ic_launcher.xml').write_text(xml)
           (adaptive/'ic_launcher_round.xml').write_text(xml)
-          print('Forced JOS icons for legacy and adaptive Android launcher resources')
+          print("Android manifest points to the approved JOS launcher assets.")
           PY
 
       - name: Verify generated Android branding assets
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          from PIL import Image
+          from PIL import Image, ImageChops
           root=Path('android/app/src/main/res')
           candidates=list(root.glob('mipmap*/ic_launcher*.png'))+list(root.glob('drawable*/splash*.png'))
           if not candidates:
@@ -192,6 +185,8 @@ jobs:
               im.load()
               if im.width < 24 or im.height < 24:
                   raise SystemExit(f"Generated asset invalid: {p} {im.size}")
+          if not (root/'mipmap-mdpi/ic_launcher.png').exists():
+              raise SystemExit("Launcher icon missing")
           print(f"Verified {len(candidates)} Android launcher/splash PNG assets")
           PY
 
