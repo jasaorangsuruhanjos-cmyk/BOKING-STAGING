@@ -10,6 +10,7 @@ on:
       - "capacitor.config.json"
       - ".github/workflows/build-android.yml"
       - "jos-icon-*.png"
+      - "resources/**"
       - "www/**"
 
 permissions:
@@ -72,7 +73,8 @@ jobs:
           cp resources/jos-logo-source.jpg /tmp/jos-logo-source.jpg
           python3 -m pip install --quiet Pillow
           python3 - <<'PY'
-          from PIL import Image
+          from PIL import Image, ImageFile
+          ImageFile.LOAD_TRUNCATED_IMAGES=True
           src=Image.open('/tmp/jos-logo-source.jpg').convert('RGB')
           src=src.resize((1024,1024),Image.Resampling.LANCZOS)
           src.save('resources/icon.png',format='PNG',optimize=True)
