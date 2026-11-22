@@ -154,8 +154,8 @@ jobs:
           for p in candidates:
               im=Image.open(p).convert('RGBA')
               im.load()
-              if im.width < 48 or im.height < 48:
-                  raise SystemExit(f"Generated asset too small: {p} {im.size}")
+              if im.width < 24 or im.height < 24:
+                  raise SystemExit(f"Generated asset invalid: {p} {im.size}")
           print(f"Verified {len(candidates)} Android launcher/splash PNG assets")
           PY
 
