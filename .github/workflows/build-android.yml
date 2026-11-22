@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
     paths:
+      - "index.html"
+      - "manifest.json"
+      - "service-worker.js"
       - "package.json"
       - "package-lock.json"
       - "capacitor.config.json"
@@ -34,8 +37,42 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Prepare web directory
-        run: test -f www/index.html
+      - name: Package actual JOS customer web app
+        run: |
+          set -euo pipefail
+          mkdir -p www
+          cp index.html www/index.html
+          cp manifest.json service-worker.js jos-icon-192.png jos-icon-512.png www/
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("www/index.html")
+          html=p.read_text(encoding="utf-8")
+          script=r"""
+          <script id="jos-native-splash-dismiss">
+          (function(){
+            const cap=window.Capacitor;
+            if(!cap || !cap.isNativePlatform || !cap.isNativePlatform()) return;
+            let done=false;
+            async function dismiss(){
+              if(done)return;
+              done=true;
+              try{
+                const splash=cap.Plugins && cap.Plugins.SplashScreen;
+                if(splash && splash.hide) await splash.hide({fadeOutDuration:250});
+              }catch(error){console.warn('JOS splash hide:',error);}
+            }
+            window.addEventListener('load',function(){setTimeout(dismiss,350);},{once:true});
+            document.addEventListener('DOMContentLoaded',function(){setTimeout(dismiss,700);},{once:true});
+            setTimeout(dismiss,9000);
+          })();
+          </script>
+          """
+          if 'jos-native-splash-dismiss' not in html:
+              html += "\n" + script + "\n"
+          p.write_text(html,encoding="utf-8")
+          if p.stat().st_size < 500000:
+              raise SystemExit("Bundled customer app unexpectedly small; refusing empty/placeholder web bundle.")
+          PY
 
       - name: Install Capacitor
         run: npm install
@@ -47,6 +84,7 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p=Path("android/app/src/main/AndroidManifest.xml")
           s=p.read_text()
           marker='android:scheme="josapp"'
@@ -60,47 +98,79 @@ jobs:
               pos=s.find('</activity>')
               if pos < 0: raise SystemExit("MainActivity closing tag not found")
               s=s[:pos]+intent+s[pos:]
-              import re
-              m=re.search(r'<activity[^>]*android:name="\.MainActivity"[^>]*>',s)
-              if m and 'android:launchMode=' not in m.group(0):
-                  s=s[:m.end()-1]+' android:launchMode="singleTask"'+s[m.end()-1:]
-              p.write_text(s)
+          m=re.search(r'<activity[^>]*android:name="\\.MainActivity"[^>]*>',s)
+          if m and 'android:launchMode=' not in m.group(0):
+              s=s[:m.end()-1]+' android:launchMode="singleTask"'+s[m.end()-1:]
+          p.write_text(s)
           PY
 
-      - name: Prepare proper JOS launcher and splash assets
+      - name: Prepare verified JOS launcher and splash assets
         run: |
+          set -euo pipefail
           mkdir -p assets
           python3 -m pip install --quiet Pillow
           python3 - <<'PY'
-          from PIL import Image, ImageFile, ImageOps
-          ImageFile.LOAD_TRUNCATED_IMAGES=True
-          src=Image.open('resources/jos-logo-source.jpg').convert('RGB')
-          # Keep the complete original JOS logo visible; never stretch or crop it.
-          def contain(canvas_size, bg, max_fraction):
-              canvas=Image.new('RGBA',(canvas_size,canvas_size),bg)
-              logo=src.copy()
-              max_w=int(canvas_size*max_fraction)
-              max_h=int(canvas_size*max_fraction)
-              logo.thumbnail((max_w,max_h),Image.Resampling.LANCZOS)
-              x=(canvas_size-logo.width)//2
-              y=(canvas_size-logo.height)//2
-              canvas.alpha_composite(logo.convert('RGBA'),(x,y))
-              return canvas
-          # Capacitor Assets uses these exact source filenames.
-          contain(1024,(169,215,242,255),0.86).save('assets/icon-only.png')
-          contain(1024,(169,215,242,255),0.86).save('assets/icon-foreground.png')
-          Image.new('RGBA',(1024,1024),(169,215,242,255)).save('assets/icon-background.png')
-          contain(2732,(255,255,255,255),0.76).save('assets/splash.png')
-          contain(2732,(255,255,255,255),0.76).save('assets/splash-dark.png')
+          from PIL import Image
+          from pathlib import Path
+          source=Image.open('resources/jos-logo-source.jpg').convert('RGB')
+          source.load()  # Fail if the uploaded source image is incomplete or corrupt.
+          if source.size not in ((512,512),(1024,1024)):
+              raise SystemExit(f"Unexpected source logo dimensions: {source.size}")
+          source=source.resize((1024,1024),Image.Resampling.LANCZOS)
+          # Full original logo artwork for legacy launcher icons.
+          source.save('assets/icon-only.png',format='PNG',optimize=True)
+          # Adaptive icon: keep the full JOS artwork centered with safe mask margins.
+          foreground=Image.new('RGBA',(1024,1024),(0,0,0,0))
+          fg=source.copy()
+          fg.thumbnail((820,820),Image.Resampling.LANCZOS)
+          foreground.alpha_composite(fg.convert('RGBA'),((1024-fg.width)//2,(1024-fg.height)//2))
+          foreground.save('assets/icon-foreground.png',format='PNG',optimize=True)
+          Image.new('RGBA',(1024,1024),(169,215,242,255)).save('assets/icon-background.png',format='PNG',optimize=True)
+          splash=Image.new('RGBA',(2732,2732),(255,255,255,255))
+          logo=source.copy()
+          logo.thumbnail((2050,2050),Image.Resampling.LANCZOS)
+          splash.alpha_composite(logo.convert('RGBA'),((2732-logo.width)//2,(2732-logo.height)//2))
+          splash.save('assets/splash.png',format='PNG',optimize=True)
+          splash.save('assets/splash-dark.png',format='PNG',optimize=True)
+          print('JOS source verified:',source.size)
           PY
           npx capacitor-assets generate --android
+
+      - name: Verify generated Android branding assets
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          root=Path('android/app/src/main/res')
+          candidates=list(root.glob('mipmap*/ic_launcher*.png'))+list(root.glob('drawable*/splash*.png'))
+          if not candidates:
+              raise SystemExit("No generated launcher/splash assets found")
+          for p in candidates:
+              im=Image.open(p).convert('RGBA')
+              im.load()
+              if im.width < 48 or im.height < 48:
+                  raise SystemExit(f"Generated asset too small: {p} {im.size}")
+          print(f"Verified {len(candidates)} Android launcher/splash PNG assets")
+          PY
 
       - name: Sync native project
         run: npx cap sync android
 
+      - name: Verify packaged web app
+        run: |
+          test -s www/index.html
+          grep -q "Jasa Orang Suruhan" www/index.html
+          grep -q "jos-native-splash-dismiss" www/index.html
+          test "$(wc -c < www/index.html)" -gt 500000
+
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug
+
+      - name: Inspect APK package
+        run: |
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+          ls -lh android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
