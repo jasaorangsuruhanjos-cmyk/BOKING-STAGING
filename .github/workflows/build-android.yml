@@ -10,6 +10,7 @@ on:
       - "capacitor.config.json"
       - ".github/workflows/build-android.yml"
       - "jos-icon-*.png"
+      - "www/**"
 
 permissions:
   contents: read
@@ -31,6 +32,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+
+      - name: Prepare web directory
+        run: test -f www/index.html
 
       - name: Install Capacitor
         run: npm install
