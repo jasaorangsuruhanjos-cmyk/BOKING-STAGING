@@ -84,24 +84,26 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p assets
-          python3 -m pip install --quiet Pillow
+          python3 -m pip install --quiet Pillow CairoSVG
           python3 - <<'PY'
-          from PIL import Image
-          from pathlib import Path
-          source=Image.open('resources/jos-logo-source.webp').convert('RGBA')
+          from PIL import Image, ImageFilter
+          import cairosvg
+          # Render the approved vector master at high resolution so the Android
+          # splash is crisp; no low-resolution raster logo is enlarged.
+          cairosvg.svg2png(url='resources/jos-logo-hd.svg',
+                           write_to='assets/jos-logo-hd.png',
+                           output_width=2400, output_height=2400)
+          source=Image.open('assets/jos-logo-hd.png').convert('RGBA')
           source.load()
-          if source.size != (384,384):
-              raise SystemExit(f'Unexpected JOS master logo dimensions: {source.size}')
+          if source.size != (2400,2400):
+              raise SystemExit(f'Unexpected JOS vector render dimensions: {source.size}')
           blue=(169,215,242,255)
           # Keep the whole original JOS artwork inside Android's adaptive-icon safe zone.
           # Full-bleed (1024px) is clipped by launcher's circular/squircle mask; 660px
           # looked too small. 660px keeps all artwork inside the adaptive-icon mask safe area.
           icon=Image.new('RGBA',(1024,1024),blue)
-          # Upscale the 384px master with a restrained high-quality sharpening pass.
-          # This improves edge clarity on Android screens without changing the logo artwork.
-          master=source.resize((1536,1536),Image.Resampling.LANCZOS)
-          from PIL import ImageFilter
-          master=master.filter(ImageFilter.UnsharpMask(radius=2.0,percent=125,threshold=2))
+          # Use the full-resolution vector render directly for splash generation.
+          master=source.filter(ImageFilter.UnsharpMask(radius=1.2,percent=45,threshold=3))
           mark=master.resize((660,660),Image.Resampling.LANCZOS)
           mark=mark.filter(ImageFilter.UnsharpMask(radius=1.1,percent=70,threshold=2))
           icon.alpha_composite(mark,((1024-mark.width)//2,(1024-mark.height)//2))
@@ -117,7 +119,7 @@ jobs:
           print(f'Launcher artwork safely centered at {mark.size}, alpha bounds {bbox}.')
           # Single Android system splash: one blue canvas and one centered, uncropped logo.
           splash=Image.new('RGBA',(2732,2732),blue)
-          # Use the sharpened 1536px master for the splash as well; preserve every edge.
+          # Use the full-resolution 2400px vector render for the splash; preserve every edge.
           mark=master.copy()
           mark.thumbnail((1900,1900),Image.Resampling.LANCZOS)
           mark=mark.filter(ImageFilter.UnsharpMask(radius=1.5,percent=90,threshold=2))
