@@ -130,7 +130,7 @@ jobs:
           from pathlib import Path
           source=Image.open('resources/jos-logo-source.jpg').convert('RGB')
           source.load()
-          if source.size != (256,256):
+          if source.size != (512,512):
               raise SystemExit(f"Unexpected JOS master logo dimensions: {source.size}")
           # Keep the supplied JOS artwork intact; do not auto-crop away its worker or wordmark.
           logo=source.resize((1024,1024),Image.Resampling.LANCZOS)
@@ -151,14 +151,17 @@ jobs:
           # Extend the logo's own horizontal background gradient edge-to-edge vertically.
           # The square artwork is placed at full screen width, without a visible tile or border.
           w,h=1080,2400
-          strip=source.crop((0,0,source.width,3)).resize((w,1),Image.Resampling.LANCZOS)
           screen=Image.new('RGB',(w,h))
-          for y in range(h):
-              screen.paste(strip,(0,y))
           big=source.resize((w,w),Image.Resampling.LANCZOS)
-          screen.paste(big,(0,(h-w)//2))
+          y0=(h-w)//2
+          y1=y0+w
+          top=source.crop((0,0,source.width,1)).resize((w,y0),Image.Resampling.LANCZOS)
+          bottom=source.crop((0,source.height-1,source.width,source.height)).resize((w,h-y1),Image.Resampling.LANCZOS)
+          screen.paste(top,(0,0))
+          screen.paste(big,(0,y0))
+          screen.paste(bottom,(0,y1))
           screen.save('www/jos-launch-screen.jpg',format='JPEG',quality=94,optimize=True)
-          print('Generated JOS launcher icon and 1080x2400 full-screen launch image from the exact repository JOS logo.')
+          print('Generated JOS launcher icon and seamless 1080x2400 full-screen launch image from the uploaded 512px JOS logo.')
           PY
           npx capacitor-assets generate --android
 
