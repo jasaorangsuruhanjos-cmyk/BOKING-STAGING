@@ -67,18 +67,31 @@ jobs:
               p.write_text(s)
           PY
 
-      - name: Prepare JOS app icon and splash
+      - name: Prepare proper JOS launcher and splash assets
         run: |
-          mkdir -p resources
-          cp resources/jos-logo-source.jpg /tmp/jos-logo-source.jpg
+          mkdir -p assets
           python3 -m pip install --quiet Pillow
           python3 - <<'PY'
-          from PIL import Image, ImageFile
+          from PIL import Image, ImageFile, ImageOps
           ImageFile.LOAD_TRUNCATED_IMAGES=True
-          src=Image.open('/tmp/jos-logo-source.jpg').convert('RGB')
-          src=src.resize((1024,1024),Image.Resampling.LANCZOS)
-          src.save('resources/icon.png',format='PNG',optimize=True)
-          src.save('resources/splash.png',format='PNG',optimize=True)
+          src=Image.open('resources/jos-logo-source.jpg').convert('RGB')
+          # Keep the complete original JOS logo visible; never stretch or crop it.
+          def contain(canvas_size, bg, max_fraction):
+              canvas=Image.new('RGBA',(canvas_size,canvas_size),bg)
+              logo=src.copy()
+              max_w=int(canvas_size*max_fraction)
+              max_h=int(canvas_size*max_fraction)
+              logo.thumbnail((max_w,max_h),Image.Resampling.LANCZOS)
+              x=(canvas_size-logo.width)//2
+              y=(canvas_size-logo.height)//2
+              canvas.alpha_composite(logo.convert('RGBA'),(x,y))
+              return canvas
+          # Capacitor Assets uses these exact source filenames.
+          contain(1024,(169,215,242,255),0.86).save('assets/icon-only.png')
+          contain(1024,(169,215,242,255),0.86).save('assets/icon-foreground.png')
+          Image.new('RGBA',(1024,1024),(169,215,242,255)).save('assets/icon-background.png')
+          contain(2732,(255,255,255,255),0.76).save('assets/splash.png')
+          contain(2732,(255,255,255,255),0.76).save('assets/splash-dark.png')
           PY
           npx capacitor-assets generate --android
 
