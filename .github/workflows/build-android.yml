@@ -128,12 +128,15 @@ jobs:
           icon.paste(icon_logo,((1024-icon_logo.width)//2,(1024-icon_logo.height)//2))
           icon.save('assets/icon-only.png',format='PNG',optimize=True)
           foreground=Image.new('RGBA',(1024,1024),(0,0,0,0))
-          fg=logo.copy(); fg.thumbnail((760,760),Image.Resampling.LANCZOS)
+          fg=logo.copy(); fg.thumbnail((960,960),Image.Resampling.LANCZOS)
           foreground.alpha_composite(fg.convert('RGBA'),((1024-fg.width)//2,(1024-fg.height)//2))
           foreground.save('assets/icon-foreground.png',format='PNG',optimize=True)
           Image.new('RGBA',(1024,1024),(169,215,242,255)).save('assets/icon-background.png',format='PNG',optimize=True)
           PY
           npx capacitor-assets generate --android
+
+      - name: Sync native project
+        run: npx cap sync android
 
       - name: Force JOS launcher icons into Android resources
         run: |
@@ -151,7 +154,7 @@ jobs:
               icon.save(d/'ic_launcher_round.png',optimize=True)
               fg=Image.new('RGBA',(size,size),(0,0,0,0))
               safe=source.copy()
-              safe.thumbnail((int(size*.72),int(size*.72)),Image.Resampling.LANCZOS)
+              safe.thumbnail((int(size*.94),int(size*.94)),Image.Resampling.LANCZOS)
               fg.alpha_composite(safe,((size-safe.width)//2,(size-safe.height)//2))
               fg.save(d/'ic_launcher_foreground.png',optimize=True)
           values=root/'values'; values.mkdir(parents=True,exist_ok=True)
@@ -180,9 +183,6 @@ jobs:
                   raise SystemExit(f"Generated asset invalid: {p} {im.size}")
           print(f"Verified {len(candidates)} Android launcher/splash PNG assets")
           PY
-
-      - name: Sync native project
-        run: npx cap sync android
 
       - name: Verify packaged web app
         run: |
