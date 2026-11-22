@@ -618,6 +618,17 @@ body.jos-order-open .bottom{display:none!important}
 @media(max-width:420px){.affiliate-form-grid{grid-template-columns:1fr}}
 </style>
 
+<script id="jos-native-app-mode">
+(function(){
+ const native=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
+ if(native){
+  document.documentElement.classList.add('jos-native-app');
+  const style=document.createElement('style');
+  style.textContent='#josInstallBanner,#josInstalledOpenPopup{display:none!important;visibility:hidden!important;pointer-events:none!important}';
+  document.head.appendChild(style);
+ }
+})();
+</script>
 </head>
 <body>
 <div class="app">
@@ -1645,6 +1656,19 @@ async function josCustomerGoogleSignIn(){
  try{
   josEl('josCustomerGoogleLogin').disabled=true;
   josMsg('josCustomerAuthMsg','Menghubungkan ke Google...');
+  const native=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
+  if(native){
+   const plugins=window.Capacitor.Plugins||{};
+   if(!plugins.Browser||!plugins.App)throw Error('Komponen login Android belum siap. Perbarui aplikasi JOS.');
+   const {data,error}=await josDb.auth.signInWithOAuth({
+    provider:'google',
+    options:{redirectTo:'josapp://auth/callback',skipBrowserRedirect:true}
+   });
+   if(error)throw error;
+   if(!data?.url)throw Error('Alamat login Google tidak diterima dari server.');
+   await plugins.Browser.open({url:data.url});
+   return;
+  }
   const {error}=await josDb.auth.signInWithOAuth({
    provider:'google',
    options:{redirectTo:'https://jasaorangsuruhanjos-cmyk.github.io/BOKING-STAGING/#akun'}
@@ -1656,6 +1680,41 @@ async function josCustomerGoogleSignIn(){
  }
 }
 josEl('josCustomerGoogleLogin').onclick=josCustomerGoogleSignIn;
+
+async function josHandleNativeGoogleCallback(rawUrl){
+ try{
+  const callback=new URL(rawUrl);
+  if(callback.protocol!=='josapp:'||callback.hostname!=='auth'||callback.pathname!=='/callback')return;
+  const code=callback.searchParams.get('code');
+  if(!code)throw Error(callback.searchParams.get('error_description')||'Kode login Google tidak ditemukan.');
+  const {data,error}=await josDb.auth.exchangeCodeForSession(code);
+  if(error)throw error;
+  const user=data?.session?.user;
+  if(!user)throw Error('Sesi Google belum berhasil disimpan.');
+  const resolved=await josResolveGoogleCustomer(user);
+  if(!resolved)throw Error('Akun Google ini bukan akun pelanggan JOS.');
+  try{await window.Capacitor?.Plugins?.Browser?.close();}catch(_){}
+  history.replaceState(null,'',location.pathname+location.search+'#akun');
+  document.querySelectorAll('.portal-layer').forEach(x=>x.classList.remove('open'));
+  josEl('josPortalCustomer')?.classList.add('open');
+  if(typeof setJosPageStatus==='function')setJosPageStatus('Akun');
+  document.querySelectorAll('.bottom .nav').forEach(btn=>btn.classList.toggle('active',btn.dataset.nav==='Akun'));
+  josPortalTab('customer');
+  await josShowRole(resolved,'customer');
+  josMsg('josCustomerAuthMsg','Login Google berhasil. Profil pelanggan JOS sudah dibuka.');
+ }catch(err){
+  try{await window.Capacitor?.Plugins?.Browser?.close();}catch(_){}
+  josMsg('josCustomerAuthMsg','Login Google belum selesai: '+(err.message||'Silakan coba lagi.'),true);
+ }finally{
+  josEl('josCustomerGoogleLogin').disabled=false;
+ }
+}
+(function josRegisterNativeGoogleCallback(){
+ const app=window.Capacitor?.Plugins?.App;
+ if(!app?.addListener)return;
+ app.addListener('appUrlOpen',event=>josHandleNativeGoogleCallback(event.url));
+ app.getLaunchUrl?.().then(result=>{if(result?.url)josHandleNativeGoogleCallback(result.url);}).catch(()=>{});
+})();
 let josGoogleOAuthCompleting=!!(new URLSearchParams(location.search).has('code') || /(?:^|[&#])access_token=/.test(location.hash));
 (async()=>{
  const params=new URLSearchParams(location.search);
@@ -2482,9 +2541,10 @@ document.getElementById('overlay')?.addEventListener('click',function(event){
   let installPromptEvent=null;
   let hideTimer=null;
   let bannerTimer=null;
+  const isNative=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
   const isInstalled=window.matchMedia('(display-mode: standalone)').matches ||
-    window.navigator.standalone===true;
-  if(isInstalled)return;
+    window.navigator.standalone===true || isNative;
+  if(isInstalled){banner.remove();return;}
 
   function showBanner(){
     banner.classList.add('show');
@@ -2816,6 +2876,7 @@ josLoadCustomerOrders=async function(){
   const close=document.getElementById('josInstalledOpenClose');
   const open=document.getElementById('josInstalledOpenNow');
   if(!popup||!close||!open)return;
+  if(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform()){popup.remove();return;}
   function hide(){
     popup.classList.remove('show');
     popup.setAttribute('aria-hidden','true');
