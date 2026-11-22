@@ -1,0 +1,13 @@
+{
+  "appId": "id.jos.pelanggan",
+  "appName": "JOS Pelanggan",
+  "webDir": "www",
+  "server": {
+    "url": "https://jasaorangsuruhanjos-cmyk.github.io/BOKING-STAGING/",
+    "cleartext": false,
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
