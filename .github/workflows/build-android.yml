@@ -125,7 +125,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p assets
-          python3 -m pip install --quiet Pillow
+          python3 -m pip install --quiet Pillow numpy
           python3 - <<'PY'
           from PIL import Image
           from pathlib import Path
