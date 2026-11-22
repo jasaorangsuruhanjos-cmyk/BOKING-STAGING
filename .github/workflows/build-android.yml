@@ -59,10 +59,8 @@ jobs:
           <div id="jos-app-launch-screen" role="img" aria-label="JOS Jasa Orang Suruhan"></div>
           <script id="jos-app-launch-controller">
           (function(){
-            var cap=window.Capacitor;
-            var native=!!(cap&&cap.isNativePlatform&&cap.isNativePlatform());
             var el=document.getElementById('jos-app-launch-screen');
-            if(!native){if(el)el.remove();return;}
+            if(!el)return;
             var done=false;
             function hide(){
               if(done)return;done=true;
