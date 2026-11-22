@@ -14,6 +14,7 @@ on:
       - ".github/workflows/build-android.yml"
       - "jos-icon-*.png"
       - "resources/**"
+      - "android-branding/**"
       - "www/**"
 
 permissions:
@@ -85,49 +86,60 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Prepare the exact approved JOS logo for Android icon and splash
+      - name: Decode the two approved JOS Android images
         run: |
           set -euo pipefail
           mkdir -p assets
+          cat android-branding/icon-512/*.b64 | tr -d '\r\n[:space:]' | base64 --decode > /tmp/jos-app-icon.webp
+          cat android-branding/splash-768/*.b64 | tr -d '\r\n[:space:]' | base64 --decode > /tmp/jos-splash.webp
           python3 -m pip install --quiet Pillow
           python3 - <<'PY'
           from PIL import Image
+          from collections import deque
           from pathlib import Path
 
-          # Single source of truth: this is the exact 512x512 JOS artwork
-          # previously approved by the owner for the Android app icon and splash.
-          # Do not use resources/jos-logo-source.webp: it is an older, incorrect logo.
-          source_path=Path('jos-icon-512.png')
-          source=Image.open(source_path).convert('RGBA')
-          source.load()
-          if source.size != (512,512):
-              raise SystemExit(f'Approved JOS logo must remain 512x512, got {source.size}')
+          icon_src=Image.open('/tmp/jos-app-icon.webp').convert('RGBA')
+          splash_src=Image.open('/tmp/jos-splash.webp').convert('RGBA')
+          icon_src.load(); splash_src.load()
+          if icon_src.size != (512,512):
+              raise SystemExit(f'Wrong launcher source dimensions: {icon_src.size}')
+          if splash_src.size != (768,768):
+              raise SystemExit(f'Wrong splash source dimensions: {splash_src.size}')
 
-          # Preserve the approved square artwork, including its complete margins.
-          # No crop, redraw, recolor, retyping, or aspect-ratio change.
-          icon=source.resize((1024,1024),Image.Resampling.LANCZOS)
-          icon.save('assets/icon-only.png',format='PNG',optimize=True)
+          # Keep the entire first image and its square canvas. Remove only the
+          # black matte connected to the outer corners so Android can mask the
+          # rounded white tile cleanly; the logo artwork itself is untouched.
+          px=icon_src.load()
+          w,h=icon_src.size
+          q=deque([(0,0),(w-1,0),(0,h-1),(w-1,h-1)])
+          seen=set()
+          while q:
+              x,y=q.popleft()
+              if (x,y) in seen or x<0 or y<0 or x>=w or y>=h: continue
+              seen.add((x,y))
+              r,g,b,a=px[x,y]
+              if max(r,g,b) <= 48:
+                  px[x,y]=(r,g,b,0)
+                  q.extend(((x-1,y),(x+1,y),(x,y-1),(x,y+1)))
 
-          # Adaptive icon: inset the complete square artwork so the technician,
-          # wrench, roof, JOS lettering, and tagline remain inside the Android mask.
+          # Native launcher sources: same square composition, no crop/stretch.
+          icon_1024=icon_src.resize((1024,1024),Image.Resampling.LANCZOS)
+          icon_1024.save('assets/icon.png',format='PNG',optimize=True)
+          icon_1024.save('assets/icon-only.png',format='PNG',optimize=True)
           foreground=Image.new('RGBA',(1024,1024),(0,0,0,0))
-          mark=source.resize((760,760),Image.Resampling.LANCZOS)
-          foreground.alpha_composite(mark,((1024-760)//2,(1024-760)//2))
+          safe=icon_src.resize((760,760),Image.Resampling.LANCZOS)
+          foreground.alpha_composite(safe,((1024-760)//2,(1024-760)//2))
           foreground.save('assets/icon-foreground.png',format='PNG',optimize=True)
           Image.new('RGBA',(1024,1024),(255,255,255,255)).save(
               'assets/icon-background.png',format='PNG',optimize=True)
 
-          # Splash uses the same exact approved logo, centered on white.
-          # Keep the complete square canvas; do not crop or enlarge past its bounds.
-          splash=source.resize((2732,2732),Image.Resampling.LANCZOS)
-          splash.save('assets/splash.png',format='PNG',optimize=True)
-          splash.save('assets/splash-dark.png',format='PNG',optimize=True)
-
-          # Verify that the image used is the approved repository icon itself.
-          if source.size != (512,512) or splash.size != (2732,2732):
-              raise SystemExit('JOS branding asset validation failed')
-          print('Android icon and splash now use jos-icon-512.png (approved original).')
-          print('Splash is square, white-background, full-frame, and uncropped.')
+          # Native splash source is the user's SECOND image. Preserve its whole
+          # 1:1 white canvas and centered artwork. Only raster resolution changes.
+          splash_2732=splash_src.resize((2732,2732),Image.Resampling.LANCZOS)
+          splash_2732.save('assets/splash.png',format='PNG',optimize=True)
+          splash_2732.save('assets/splash-dark.png',format='PNG',optimize=True)
+          print('Approved launcher image:',icon_src.size,'-> Android icon')
+          print('Approved second image:',splash_src.size,'-> uncropped white splash')
           PY
           npx capacitor-assets generate --android
 
