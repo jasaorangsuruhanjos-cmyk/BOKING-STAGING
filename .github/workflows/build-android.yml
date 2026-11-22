@@ -69,7 +69,7 @@ jobs:
               e.classList.add('jos-launch-hide');
               setTimeout(function(){if(e.parentNode)e.parentNode.removeChild(e);},320);
             }
-            window.addEventListener('load',function(){setTimeout(hide,450);},{once:true});
+            window.addEventListener('load',function(){setTimeout(hide,850);},{once:true});
             setTimeout(hide,9000);
           })();
           </script>
@@ -190,7 +190,7 @@ jobs:
           manifest=Path('android/app/src/main/AndroidManifest.xml')
           text=manifest.read_text()
           import re
-          app=re.search(r'<application\\b[^>]*>',text)
+          app=re.search(r'<application\b[^>]*>',text)
           if not app: raise SystemExit("Android application tag not found")
           tag=app.group(0)
           tag=re.sub(r'android:icon="[^"]+"','',tag)
