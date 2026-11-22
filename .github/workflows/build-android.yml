@@ -107,7 +107,7 @@ jobs:
 
           # Adaptive foreground: keep the complete square source inside the safe zone.
           foreground=Image.new('RGBA',(1024,1024),(0,0,0,0))
-          mark=source.resize((760,760),Image.Resampling.LANCZOS)
+          mark=source.resize((680,680),Image.Resampling.LANCZOS)
           foreground.alpha_composite(mark,((1024-760)//2,(1024-760)//2))
           foreground.save('assets/icon-foreground.png',format='PNG',optimize=True)
           # Match outer adaptive background to the official logo's light-blue edge.
@@ -149,7 +149,7 @@ jobs:
               icon=source.resize((size,size),Image.Resampling.LANCZOS)
               icon.save(d/'ic_launcher.png',optimize=True)
               icon.save(d/'ic_launcher_round.png',optimize=True)
-              # Keep the foreground artwork full-size; do not add a second inset.
+              # Keep the foreground artwork safely inset; keep technician, lettering, roof and base fully inside adaptive mask.
               fg=foreground_source.resize((size,size),Image.Resampling.LANCZOS)
               fg.save(d/'ic_launcher_foreground.png',optimize=True)
           values=root/'values'; values.mkdir(parents=True,exist_ok=True)
