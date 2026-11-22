@@ -37,17 +37,54 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Package customer website without duplicate HTML splash
+      - name: Package customer website with one fullscreen JOS splash
         run: |
           set -euo pipefail
           mkdir -p www
           cp index.html www/index.html
           cp manifest.json service-worker.js jos-icon-192.png jos-icon-512.png www/
-          # Splash screen is provided only by the native Android SplashScreen plugin.
-          if grep -q 'jos-app-launch-screen' www/index.html; then
-            echo "Unexpected old HTML launch overlay found in source; refusing duplicate splash build."
-            exit 1
-          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('www/index.html')
+          html=p.read_text(encoding='utf-8')
+          if 'jos-app-launch-screen' in html:
+              raise SystemExit('Existing splash markup found in source; refusing stacked launch screens.')
+          overlay = """
+          <style id="jos-app-launch-style">
+          html,body{background:#a9d7f2}
+          #jos-app-launch-screen{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;z-index:2147483647;background:#a9d7f2 url('jos-launch-screen.jpg') center center/100% 100% no-repeat;opacity:1;visibility:visible;transition:opacity .32s ease}
+          #jos-app-launch-screen.jos-launch-hide{opacity:0;pointer-events:none}
+          </style>
+          <div id="jos-app-launch-screen" role="img" aria-label="JOS Jasa Orang Suruhan"></div>
+          <script id="jos-app-launch-controller">
+          (function(){
+            var cap=window.Capacitor;
+            var native=!!(cap&&cap.isNativePlatform&&cap.isNativePlatform());
+            var el=document.getElementById('jos-app-launch-screen');
+            if(!native){if(el)el.remove();return;}
+            var done=false;
+            function hide(){
+              if(done)return;done=true;
+              el=document.getElementById('jos-app-launch-screen');
+              if(!el)return;
+              el.classList.add('jos-launch-hide');
+              setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},360);
+            }
+            window.addEventListener('load',function(){setTimeout(hide,950);},{once:true});
+            setTimeout(hide,9000);
+          })();
+          </script>
+          """
+          m=re.search(r'<body[^>]*>',html,re.I)
+          if not m: raise SystemExit('BODY tag not found')
+          html=html[:m.end()]+'\\n'+overlay+'\\n'+html[m.end():]
+          if html.count('id="jos-app-launch-screen"')!=1:
+              raise SystemExit('Expected exactly one full-screen JOS launch image')
+          p.write_text(html,encoding='utf-8')
+          if p.stat().st_size < 500000:
+              raise SystemExit('Bundled customer app unexpectedly small.')
+          PY
 
       - name: Install Capacitor
         run: npm install
@@ -85,36 +122,46 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Prepare padded JOS launcher icon and one native splash
+      - name: Prepare full-size JOS icon and fullscreen splash artwork
         run: |
           set -euo pipefail
-          mkdir -p assets
+          mkdir -p assets www
           python3 -m pip install --quiet Pillow
           python3 - <<'PY'
           from PIL import Image
-          source=Image.open('resources/jos-logo-source.webp').convert('RGBA')
+          from pathlib import Path
+          source=Image.open('resources/jos-logo-source.webp').convert('RGB')
           source.load()
           if source.size != (384,384):
-              raise SystemExit(f"Unexpected JOS master logo dimensions: {source.size}")
-          # Adaptive Android icons are masked into circles/squircles. Keep the entire
-          # supplied artwork inside the central 72% safe zone to prevent clipping.
-          canvas=Image.new('RGBA',(1024,1024),(169,215,242,255))
-          logo=source.copy()
-          logo.thumbnail((740,740),Image.Resampling.LANCZOS)
-          canvas.alpha_composite(logo,((1024-logo.width)//2,(1024-logo.height)//2))
-          canvas.save('assets/icon-only.png',format='PNG',optimize=True)
-          foreground=Image.new('RGBA',(1024,1024),(0,0,0,0))
-          foreground.alpha_composite(logo,((1024-logo.width)//2,(1024-logo.height)//2))
-          foreground.save('assets/icon-foreground.png',format='PNG',optimize=True)
+              raise SystemExit(f'Unexpected JOS master logo dimensions: {source.size}')
+          # Do not double-pad the customer logo. Use the complete supplied square image.
+          logo=source.resize((1024,1024),Image.Resampling.LANCZOS)
+          logo.save('assets/icon-only.png',format='PNG',optimize=True)
+          # Adaptive foreground gets only a small 4% breathing margin, not the former 28%.
+          fg=Image.new('RGBA',(1024,1024),(0,0,0,0))
+          mark=logo.convert('RGBA').resize((960,960),Image.Resampling.LANCZOS)
+          fg.alpha_composite(mark,(32,32))
+          fg.save('assets/icon-foreground.png',format='PNG',optimize=True)
           Image.new('RGBA',(1024,1024),(169,215,242,255)).save('assets/icon-background.png',format='PNG',optimize=True)
-          # One native Android splash: single blue background and fully contained logo.
-          splash=Image.new('RGBA',(2732,2732),(169,215,242,255))
-          mark=source.copy()
-          mark.thumbnail((1700,1700),Image.Resampling.LANCZOS)
-          splash.alpha_composite(mark,((2732-mark.width)//2,(2732-mark.height)//2))
-          splash.save('assets/splash.png',format='PNG',optimize=True)
-          splash.save('assets/splash-dark.png',format='PNG',optimize=True)
-          print('Prepared padded JOS launcher artwork and one centered native splash.')
+          # Android's system splash is kept logo-free (matching solid background).
+          # The sole visible JOS logo splash is the full-screen page overlay below.
+          blank=Image.new('RGBA',(2732,2732),(0,0,0,0))
+          blank.save('assets/splash.png',format='PNG',optimize=True)
+          blank.save('assets/splash-dark.png',format='PNG',optimize=True)
+          # One portrait splash image: gradient fills full screen and the full JOS artwork
+          # is displayed at 100% of screen width, without a nested square or tile.
+          w,h=1080,2400
+          screen=Image.new('RGB',(w,h))
+          big=source.resize((w,w),Image.Resampling.LANCZOS)
+          y0=(h-w)//2
+          y1=y0+w
+          top=source.crop((0,0,source.width,1)).resize((w,y0),Image.Resampling.LANCZOS)
+          bottom=source.crop((0,source.height-1,source.width,source.height)).resize((w,h-y1),Image.Resampling.LANCZOS)
+          screen.paste(top,(0,0))
+          screen.paste(big,(0,y0))
+          screen.paste(bottom,(0,y1))
+          screen.save('www/jos-launch-screen.jpg',format='JPEG',quality=96,optimize=True)
+          print('Prepared full-size JOS icon, transparent native splash, and single full-screen JOS artwork.')
           PY
           npx capacitor-assets generate --android
 
