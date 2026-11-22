@@ -120,7 +120,7 @@ jobs:
           from pathlib import Path
           source=Image.open('resources/jos-logo-source.jpg').convert('RGB')
           source.load()  # Fail if the uploaded source image is incomplete or corrupt.
-          if source.size not in ((512,512),(1024,1024)):
+          if source.size not in ((256,256),(512,512),(1024,1024)):
               raise SystemExit(f"Unexpected source logo dimensions: {source.size}")
           source=source.resize((1024,1024),Image.Resampling.LANCZOS)
           # Full original logo artwork for legacy launcher icons.
