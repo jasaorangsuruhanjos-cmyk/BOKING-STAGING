@@ -189,15 +189,14 @@ jobs:
           colors.write_text('''<resources><color name="jos_launcher_background">#A9D7F2</color></resources>''')
           manifest=Path('android/app/src/main/AndroidManifest.xml')
           text=manifest.read_text()
-          import re
-          app=re.search(r'<application\b[^>]*>',text)
-          if not app: raise SystemExit("Android application tag not found")
-          tag=app.group(0)
+          start=text.find('<application')
+          end=text.find('>',start)
+          if start < 0 or end < 0: raise SystemExit("Android application tag not found")
+          tag=text[start:end+1]
           tag=re.sub(r'android:icon="[^"]+"','',tag)
           tag=re.sub(r'android:roundIcon="[^"]+"','',tag)
           tag=tag[:-1]+' android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round">'
-          text=text[:app.start()]+tag+text[app.end():]
-          manifest.write_text(text)
+          manifest.write_text(text[:start]+tag+text[end+1:])
           print("Android application manifest explicitly points to the JOS launcher icons")
           adaptive=root/'mipmap-anydpi-v26'; adaptive.mkdir(parents=True,exist_ok=True)
           xml='''<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/jos_launcher_background"/><foreground android:drawable="@mipmap/ic_launcher_foreground"/></adaptive-icon>'''
