@@ -146,6 +146,28 @@ jobs:
       - name: Sync native project
         run: npx cap sync android
 
+      - name: Preserve the exact square splash artwork on every Android screen size
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          source=Image.open('/tmp/jos-splash.webp').convert('RGBA')
+          source.load()
+          root=Path('android/app/src/main/res')
+          targets=sorted(root.glob('drawable*/splash.png'))
+          if not targets:
+              raise SystemExit('Capacitor did not generate Android splash resources')
+          for target in targets:
+              with Image.open(target) as current:
+                  width,height=current.size
+              side=min(width,height)
+              square=source.resize((side,side),Image.Resampling.LANCZOS)
+              canvas=Image.new('RGBA',(width,height),(255,255,255,255))
+              canvas.alpha_composite(square,((width-side)//2,(height-side)//2))
+              canvas.save(target,format='PNG',optimize=True)
+          print(f'Preserved full square second image in {len(targets)} portrait/landscape/night splash resources.')
+          PY
+
       - name: Force approved JOS launcher icons into Android resources
         run: |
           python3 - <<'PY'
@@ -212,10 +234,60 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug
 
-      - name: Inspect APK package
+      - name: Inspect and verify the APK package, signature, icon, and splash
         run: |
-          test -s android/app/build/outputs/apk/debug/app-debug.apk
-          ls -lh android/app/build/outputs/apk/debug/app-debug.apk
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          ls -lh "$APK"
+          unzip -tq "$APK"
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK"
+          APKSIGNER="$(find "$SDK/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          AAPT="$(find "$SDK/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          test -x "$AAPT"
+          "$APKSIGNER" verify --verbose "$APK"
+          "$AAPT" dump badging "$APK" | tee /tmp/jos-apk-badging.txt
+          grep -Fq "package: name='id.jos.pelanggan'" /tmp/jos-apk-badging.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image, ImageChops
+          from io import BytesIO
+          import zipfile
+
+          apk=Path('android/app/build/outputs/apk/debug/app-debug.apk')
+          with zipfile.ZipFile(apk) as z:
+              bad=z.testzip()
+              if bad: raise SystemExit(f'Corrupt APK ZIP entry: {bad}')
+              names=z.namelist()
+              required=[
+                'AndroidManifest.xml',
+                'classes.dex',
+                'res/mipmap-xxxhdpi-v4/ic_launcher.png',
+                'res/mipmap-xxxhdpi-v4/ic_launcher_foreground.png',
+                'res/mipmap-anydpi-v26/ic_launcher.xml',
+                'res/drawable-port-xxxhdpi-v4/splash.png'
+              ]
+              for name in required:
+                  if name not in names: raise SystemExit(f'Missing APK resource: {name}')
+              actual_icon=Image.open(BytesIO(z.read('res/mipmap-xxxhdpi-v4/ic_launcher.png'))).convert('RGBA')
+              expected_icon=Image.open('assets/icon-only.png').convert('RGBA').resize((192,192),Image.Resampling.LANCZOS)
+              if ImageChops.difference(actual_icon,expected_icon).getbbox():
+                  raise SystemExit('APK launcher icon does not match the supplied first image')
+              actual_splash=Image.open(BytesIO(z.read('res/drawable-port-xxxhdpi-v4/splash.png'))).convert('RGBA')
+              source=Image.open('/tmp/jos-splash.webp').convert('RGBA')
+              w,h=actual_splash.size
+              side=min(w,h)
+              square=source.resize((side,side),Image.Resampling.LANCZOS)
+              expected=Image.new('RGBA',(w,h),(255,255,255,255))
+              expected.alpha_composite(square,((w-side)//2,(h-side)//2))
+              if ImageChops.difference(actual_splash,expected).getbbox():
+                  raise SystemExit('APK splash does not preserve the supplied second square image')
+              print('APK package integrity: OK')
+              print('Launcher icon: exact match to supplied first image (Android sizes rasterized only)')
+              print('Splash screen: exact square image centered on white; no crop or fill scaling')
+          PY
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
