@@ -98,9 +98,15 @@ jobs:
               pos=s.find('</activity>')
               if pos < 0: raise SystemExit("MainActivity closing tag not found")
               s=s[:pos]+intent+s[pos:]
-          m=re.search(r'<activity[^>]*android:name="\\.MainActivity"[^>]*>',s)
-          if m and 'android:launchMode=' not in m.group(0):
-              s=s[:m.end()-1]+' android:launchMode="singleTask"'+s[m.end()-1:]
+          activity=None
+          for match in re.finditer(r'<activity[^>]*>',s):
+              if 'MainActivity' in match.group(0):
+                  activity=match
+                  break
+          if activity is None:
+              raise SystemExit("MainActivity declaration not found")
+          if 'android:launchMode=' not in activity.group(0):
+              s=s[:activity.end()-1]+' android:launchMode="singleTask"'+s[activity.end()-1:]
           p.write_text(s)
           PY
 
