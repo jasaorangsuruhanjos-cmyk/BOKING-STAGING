@@ -93,16 +93,23 @@ jobs:
           if source.size != (384,384):
               raise SystemExit(f'Unexpected JOS master logo dimensions: {source.size}')
           blue=(169,215,242,255)
-          # Use the complete original square logo at full canvas size.
-          # Previous 700/660px thumbnails made the logo look like a small tile inside
-          # the blue launcher box. Full-bleed artwork is the correct launcher design.
-          icon=source.resize((1024,1024),Image.Resampling.LANCZOS)
+          # Keep the whole original JOS artwork inside Android's adaptive-icon safe zone.
+          # Full-bleed (1024px) is clipped by launcher's circular/squircle mask; 660px
+          # looked too small. 820px gives the artwork a 10% border and larger visual size.
+          icon=Image.new('RGBA',(1024,1024),blue)
+          mark=source.copy()
+          mark.thumbnail((820,820),Image.Resampling.LANCZOS)
+          icon.alpha_composite(mark,((1024-mark.width)//2,(1024-mark.height)//2))
           icon.save('assets/icon-only.png',format='PNG',optimize=True)
-          # Adaptive foreground also uses the full original artwork. Android applies
-          # its launcher mask to the canvas corners; the important logo stays visible.
-          foreground=source.resize((1024,1024),Image.Resampling.LANCZOS)
+          # Transparent foreground with same scale: no extra inset is added downstream.
+          foreground=Image.new('RGBA',(1024,1024),(0,0,0,0))
+          foreground.alpha_composite(mark,((1024-mark.width)//2,(1024-mark.height)//2))
           foreground.save('assets/icon-foreground.png',format='PNG',optimize=True)
           Image.new('RGBA',(1024,1024),blue).save('assets/icon-background.png',format='PNG',optimize=True)
+          bbox=foreground.getbbox()
+          if not bbox or bbox[0] < 95 or bbox[1] < 95 or bbox[2] > 929 or bbox[3] > 929:
+              raise SystemExit(f'JOS foreground escaped safe zone: {bbox}')
+          print(f'Launcher artwork safely centered at {mark.size}, alpha bounds {bbox}.')
           # Single Android system splash: one blue canvas and one centered, uncropped logo.
           splash=Image.new('RGBA',(2732,2732),blue)
           mark=source.copy()
