@@ -93,17 +93,14 @@ jobs:
           if source.size != (384,384):
               raise SystemExit(f'Unexpected JOS master logo dimensions: {source.size}')
           blue=(169,215,242,255)
-          # Keep the complete supplied logo artwork inside a generous safe margin.
-          icon=Image.new('RGBA',(1024,1024),blue)
-          mark=source.copy()
-          mark.thumbnail((700,700),Image.Resampling.LANCZOS)
-          icon.alpha_composite(mark,((1024-mark.width)//2,(1024-mark.height)//2))
+          # Use the complete original square logo at full canvas size.
+          # Previous 700/660px thumbnails made the logo look like a small tile inside
+          # the blue launcher box. Full-bleed artwork is the correct launcher design.
+          icon=source.resize((1024,1024),Image.Resampling.LANCZOS)
           icon.save('assets/icon-only.png',format='PNG',optimize=True)
-          # Adaptive icon foreground stays well inside Android's circular/squircle mask.
-          foreground=Image.new('RGBA',(1024,1024),(0,0,0,0))
-          mark=source.copy()
-          mark.thumbnail((660,660),Image.Resampling.LANCZOS)
-          foreground.alpha_composite(mark,((1024-mark.width)//2,(1024-mark.height)//2))
+          # Adaptive foreground also uses the full original artwork. Android applies
+          # its launcher mask to the canvas corners; the important logo stays visible.
+          foreground=source.resize((1024,1024),Image.Resampling.LANCZOS)
           foreground.save('assets/icon-foreground.png',format='PNG',optimize=True)
           Image.new('RGBA',(1024,1024),blue).save('assets/icon-background.png',format='PNG',optimize=True)
           # Single Android system splash: one blue canvas and one centered, uncropped logo.
@@ -128,6 +125,7 @@ jobs:
           import xml.etree.ElementTree as ET
           import re
           source=Image.open('assets/icon-only.png').convert('RGBA')
+          foreground_source=Image.open('assets/icon-foreground.png').convert('RGBA')
           root=Path('android/app/src/main/res')
           sizes={'mipmap-mdpi':48,'mipmap-hdpi':72,'mipmap-xhdpi':96,'mipmap-xxhdpi':144,'mipmap-xxxhdpi':192}
           for folder,size in sizes.items():
@@ -135,10 +133,8 @@ jobs:
               icon=source.resize((size,size),Image.Resampling.LANCZOS)
               icon.save(d/'ic_launcher.png',optimize=True)
               icon.save(d/'ic_launcher_round.png',optimize=True)
-              fg=Image.new('RGBA',(size,size),(0,0,0,0))
-              safe=source.copy()
-              safe.thumbnail((int(size*.94),int(size*.94)),Image.Resampling.LANCZOS)
-              fg.alpha_composite(safe,((size-safe.width)//2,(size-safe.height)//2))
+              # Keep the foreground artwork full-size; do not add a second inset.
+              fg=foreground_source.resize((size,size),Image.Resampling.LANCZOS)
               fg.save(d/'ic_launcher_foreground.png',optimize=True)
           values=root/'values'; values.mkdir(parents=True,exist_ok=True)
           colors=values/'jos_launcher_colors.xml'
