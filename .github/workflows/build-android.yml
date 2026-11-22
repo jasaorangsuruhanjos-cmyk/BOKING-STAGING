@@ -42,11 +42,39 @@ jobs:
       - name: Generate Android project
         run: npx cap add android
 
+      - name: Configure native deep link callback
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("android/app/src/main/AndroidManifest.xml")
+          s=p.read_text()
+          marker='android:scheme="josapp"'
+          if marker not in s:
+              intent='''<intent-filter>
+                          <action android:name="android.intent.action.VIEW" />
+                          <category android:name="android.intent.category.DEFAULT" />
+                          <category android:name="android.intent.category.BROWSABLE" />
+                          <data android:scheme="josapp" android:host="auth" android:path="/callback" />
+                      </intent-filter>'''
+              pos=s.find('</activity>')
+              if pos < 0: raise SystemExit("MainActivity closing tag not found")
+              s=s[:pos]+intent+s[pos:]
+              s=s.replace('android:name=".MainActivity"','android:name=".MainActivity" android:launchMode="singleTask"')
+              p.write_text(s)
+          PY
+
       - name: Prepare JOS app icon and splash
         run: |
           mkdir -p resources
-          cp jos-icon-512.png resources/icon.png
-          cp jos-icon-512.png resources/splash.png
+          cp resources/jos-logo-source.jpg /tmp/jos-logo-source.jpg
+          python3 -m pip install --quiet Pillow
+          python3 - <<'PY'
+          from PIL import Image
+          src=Image.open('/tmp/jos-logo-source.jpg').convert('RGB')
+          src=src.resize((1024,1024),Image.Resampling.LANCZOS)
+          src.save('resources/icon.png',format='PNG',optimize=True)
+          src.save('resources/splash.png',format='PNG',optimize=True)
+          PY
           npx capacitor-assets generate --android
 
       - name: Sync native project
