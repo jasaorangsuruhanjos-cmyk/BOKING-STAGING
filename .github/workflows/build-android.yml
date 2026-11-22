@@ -19,6 +19,11 @@ on:
 permissions:
   contents: write
 
+# Only the newest staging commit may publish the downloadable APK.
+concurrency:
+  group: jos-android-staging-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
