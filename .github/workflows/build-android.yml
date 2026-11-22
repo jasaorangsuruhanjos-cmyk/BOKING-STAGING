@@ -128,9 +128,9 @@ jobs:
           python3 - <<'PY'
           from PIL import Image
           from pathlib import Path
-          source=Image.open('resources/jos-logo-source.jpg').convert('RGB')
+          source=Image.open('resources/jos-logo-source.webp').convert('RGB')
           source.load()
-          if source.size != (512,512):
+          if source.size != (384,384):
               raise SystemExit(f"Unexpected JOS master logo dimensions: {source.size}")
           # Keep the supplied JOS artwork intact; do not auto-crop away its worker or wordmark.
           logo=source.resize((1024,1024),Image.Resampling.LANCZOS)
@@ -161,7 +161,7 @@ jobs:
           screen.paste(big,(0,y0))
           screen.paste(bottom,(0,y1))
           screen.save('www/jos-launch-screen.jpg',format='JPEG',quality=94,optimize=True)
-          print('Generated JOS launcher icon and seamless 1080x2400 full-screen launch image from the uploaded 512px JOS logo.')
+          print('Generated JOS launcher icon and seamless 1080x2400 full-screen launch image from the exact uploaded 384px JOS logo.')
           PY
           npx capacitor-assets generate --android
 
