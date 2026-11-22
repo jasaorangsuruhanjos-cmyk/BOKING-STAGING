@@ -47,28 +47,39 @@ jobs:
           from pathlib import Path
           p=Path("www/index.html")
           html=p.read_text(encoding="utf-8")
-          script=r"""
+          overlay=r"""
+          <style id="jos-native-fullscreen-splash-style">
+          #jos-native-fullscreen-splash{position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;overflow:hidden;background:linear-gradient(145deg,#c9edfa 0%,#a9d7f2 48%,#78b6e8 100%);opacity:1;transition:opacity .4s ease}
+          #jos-native-fullscreen-splash img{display:block;width:92vw;max-width:720px;max-height:68vh;object-fit:contain;filter:drop-shadow(0 10px 18px rgba(7,46,105,.12))}
+          #jos-native-fullscreen-splash.jos-fade{opacity:0;pointer-events:none}
+          @media(prefers-reduced-motion:reduce){#jos-native-fullscreen-splash{transition:none}}
+          </style>
+          <div id="jos-native-fullscreen-splash" aria-label="JOS Jasa Orang Suruhan">
+            <img src="jos-native-splash.png" alt="JOS Jasa Orang Suruhan">
+          </div>
           <script id="jos-native-splash-dismiss">
           (function(){
             const cap=window.Capacitor;
-            if(!cap || !cap.isNativePlatform || !cap.isNativePlatform()) return;
+            const native=!!(cap&&cap.isNativePlatform&&cap.isNativePlatform());
+            if(!native)return;
+            const overlay=document.getElementById('jos-native-fullscreen-splash');
+            if(overlay)overlay.style.display='flex';
             let done=false;
             async function dismiss(){
-              if(done)return;
-              done=true;
-              try{
-                const splash=cap.Plugins && cap.Plugins.SplashScreen;
-                if(splash && splash.hide) await splash.hide({fadeOutDuration:250});
-              }catch(error){console.warn('JOS splash hide:',error);}
+              if(done)return;done=true;
+              if(overlay){overlay.classList.add('jos-fade');setTimeout(()=>overlay.remove(),450);}
+              try{const splash=cap.Plugins&&cap.Plugins.SplashScreen;if(splash&&splash.hide)await splash.hide({fadeOutDuration:350});}catch(error){console.warn('JOS native splash:',error);}
             }
-            window.addEventListener('load',function(){setTimeout(dismiss,350);},{once:true});
-            document.addEventListener('DOMContentLoaded',function(){setTimeout(dismiss,700);},{once:true});
-            setTimeout(dismiss,9000);
+            window.addEventListener('load',()=>setTimeout(dismiss,2200),{once:true});
+            setTimeout(dismiss,10000);
           })();
           </script>
           """
-          if 'jos-native-splash-dismiss' not in html:
-              html += "\n" + script + "\n"
+          if 'jos-native-fullscreen-splash' not in html:
+              if '</body>' in html:
+                  html=html.replace('</body>',overlay+'\n</body>',1)
+              else:
+                  html += overlay
           p.write_text(html,encoding="utf-8")
           if p.stat().st_size < 500000:
               raise SystemExit("Bundled customer app unexpectedly small; refusing empty/placeholder web bundle.")
@@ -123,24 +134,60 @@ jobs:
           if source.size not in ((256,256),(512,512),(1024,1024)):
               raise SystemExit(f"Unexpected source logo dimensions: {source.size}")
           source=source.resize((1024,1024),Image.Resampling.LANCZOS)
-          # Full original logo artwork for legacy launcher icons.
+          # Keep the full JOS wordmark large and centered. Use one full-bleed brand colour.
+          source=source.resize((1024,1024),Image.Resampling.LANCZOS)
           source.save('assets/icon-only.png',format='PNG',optimize=True)
-          # Adaptive icon: keep the full JOS artwork centered with safe mask margins.
           foreground=Image.new('RGBA',(1024,1024),(0,0,0,0))
           fg=source.copy()
-          fg.thumbnail((820,820),Image.Resampling.LANCZOS)
+          fg.thumbnail((900,900),Image.Resampling.LANCZOS)
           foreground.alpha_composite(fg.convert('RGBA'),((1024-fg.width)//2,(1024-fg.height)//2))
           foreground.save('assets/icon-foreground.png',format='PNG',optimize=True)
           Image.new('RGBA',(1024,1024),(169,215,242,255)).save('assets/icon-background.png',format='PNG',optimize=True)
-          splash=Image.new('RGBA',(2732,2732),(255,255,255,255))
+          # Android native splash artwork, full-bleed background with a much larger wordmark.
+          splash=Image.new('RGBA',(2732,2732),(169,215,242,255))
           logo=source.copy()
-          logo.thumbnail((2050,2050),Image.Resampling.LANCZOS)
+          logo.thumbnail((2500,2500),Image.Resampling.LANCZOS)
           splash.alpha_composite(logo.convert('RGBA'),((2732-logo.width)//2,(2732-logo.height)//2))
           splash.save('assets/splash.png',format='PNG',optimize=True)
           splash.save('assets/splash-dark.png',format='PNG',optimize=True)
-          print('JOS source verified:',source.size)
+          # HTML full-screen launch screen image used by the Android WebView after native splash.
+          screen=Image.new('RGB',(1080,1920),(169,215,242))
+          logo=source.copy()
+          logo.thumbnail((990,990),Image.Resampling.LANCZOS)
+          screen.paste(logo,((1080-logo.width)//2,(1920-logo.height)//2))
+          screen.save('www/jos-native-splash.png',format='PNG',optimize=True)
+          print('JOS splash and icon assets generated from verified source:',source.size)
           PY
           npx capacitor-assets generate --android
+
+      - name: Force JOS launcher icons into Android resources
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import xml.etree.ElementTree as ET
+          source=Image.open('assets/icon-only.png').convert('RGBA')
+          root=Path('android/app/src/main/res')
+          sizes={'mipmap-mdpi':48,'mipmap-hdpi':72,'mipmap-xhdpi':96,'mipmap-xxhdpi':144,'mipmap-xxxhdpi':192}
+          for folder,size in sizes.items():
+              d=root/folder; d.mkdir(parents=True,exist_ok=True)
+              icon=source.resize((size,size),Image.Resampling.LANCZOS)
+              icon.save(d/'ic_launcher.png',optimize=True)
+              icon.save(d/'ic_launcher_round.png',optimize=True)
+              fg=Image.new('RGBA',(size,size),(0,0,0,0))
+              safe=source.copy()
+              safe.thumbnail((int(size*.72),int(size*.72)),Image.Resampling.LANCZOS)
+              fg.alpha_composite(safe,((size-safe.width)//2,(size-safe.height)//2))
+              fg.save(d/'ic_launcher_foreground.png',optimize=True)
+          values=root/'values'; values.mkdir(parents=True,exist_ok=True)
+          colors=values/'jos_launcher_colors.xml'
+          colors.write_text('''<resources><color name="jos_launcher_background">#A9D7F2</color></resources>''')
+          adaptive=root/'mipmap-anydpi-v26'; adaptive.mkdir(parents=True,exist_ok=True)
+          xml='''<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/jos_launcher_background"/><foreground android:drawable="@mipmap/ic_launcher_foreground"/></adaptive-icon>'''
+          (adaptive/'ic_launcher.xml').write_text(xml)
+          (adaptive/'ic_launcher_round.xml').write_text(xml)
+          print('Forced JOS icons for legacy and adaptive Android launcher resources')
+          PY
 
       - name: Verify generated Android branding assets
         run: |
