@@ -114,19 +114,23 @@ jobs:
           Image.new('RGBA',(1024,1024),(169,215,242,255)).save(
               'assets/icon-background.png',format='PNG',optimize=True)
 
-          # Single native splash image, based on the exact original PNG.
-          # Upscaling only; no generated vector artwork or replacement lettering.
-          master=source.resize((2732,2732),Image.Resampling.LANCZOS)
-          # Very light sharpening offsets raster scaling without changing contours.
-          master=master.filter(ImageFilter.UnsharpMask(radius=1.0,percent=35,threshold=4))
+          # Single native splash: use the clean square JOS logo artwork supplied in resources.
+          # This composition matches the requested splash panel and has no black strip at the bottom.
+          splash_source=Image.open('resources/jos-logo-source.webp').convert('RGBA')
+          if splash_source.width != splash_source.height:
+              raise SystemExit(f'Expected square JOS splash artwork, got {splash_source.size}')
+          master=splash_source.resize((2732,2732),Image.Resampling.LANCZOS)
+          # Gentle sharpening after upscale; preserve original logo, lettering and proportions.
+          master=master.filter(ImageFilter.UnsharpMask(radius=1.0,percent=45,threshold=3))
           master.save('assets/splash.png',format='PNG',optimize=True)
           master.save('assets/splash-dark.png',format='PNG',optimize=True)
 
           # Confirm splash remains a full, undistorted 1:1 copy of the source composition.
           if master.size != (2732,2732):
               raise SystemExit('JOS splash generation size check failed')
-          print('Branding source: jos-icon-512.png (official original).')
-          print('Generated one full-frame splash; original artwork composition preserved.')
+          print('Launcher icon source: jos-icon-512.png.')
+          print('Splash source: clean square resources/jos-logo-source.webp; bottom black strip excluded.')
+          print('Generated one full-frame splash composition; original artwork preserved.')
           PY
           npx capacitor-assets generate --android
 
