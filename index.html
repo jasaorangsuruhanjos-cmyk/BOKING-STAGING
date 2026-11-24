@@ -1275,6 +1275,28 @@ async function sendOrder(){
    if(result.error)throw result.error;
    savedOrder=result.data;
    if(!savedOrder?.id)throw new Error('Database tidak mengembalikan ID pesanan.');
+  // Google Ads/GTM: catat konversi hanya setelah row pesanan berhasil tersimpan.
+  // Tidak mengirim nama, email, nomor WhatsApp, alamat, atau data pribadi pelanggan.
+  try{
+   window.dataLayer=window.dataLayer||[];
+   window.dataLayer.push({
+    event:'jos_booking_success',
+    event_category:'booking',
+    transaction_id:String(savedOrder.id),
+    order_code:code,
+    service_name:serviceName||'Layanan khusus',
+    value:Number(finalEstimate)||0,
+    currency:'IDR'
+   });
+   window.dispatchEvent(new CustomEvent('jos:booking-success',{detail:{
+    transaction_id:String(savedOrder.id),
+    order_code:code,
+    service_name:serviceName||'Layanan khusus',
+    value:Number(finalEstimate)||0,
+    currency:'IDR'
+   }}));
+  }catch(trackError){console.warn('JOS conversion event gagal dikirim:',trackError);}
+
   }catch(e){
    throw new Error('Pesanan belum dapat dipastikan tersimpan: '+(e.message||'Periksa tabel orders dan izin database. Jika tadi sempat timeout, cek menu Pesanan sebelum mencoba lagi.'));
   }
