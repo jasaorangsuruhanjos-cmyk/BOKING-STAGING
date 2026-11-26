@@ -32,6 +32,7 @@
 .tools{display:flex;gap:8px;padding:8px 12px 0;background:#fff}
 .toolbtn{border:1px solid #d7e3ed;background:#f7fbff;color:#17649e;border-radius:10px;padding:8px 11px;font-size:12px}
 .media-preview{max-width:220px;max-height:220px;border-radius:10px;display:block;margin-top:6px}
+.video-preview-wrap{position:relative}.video-loading{display:block;font-size:10px;color:#738398;padding:5px 0}.video-loading[hidden]{display:none}
 .location-link{display:inline-block;margin-top:6px;color:#0878d1;text-decoration:underline}
 .login-note{margin:auto;padding:22px;text-align:center;font-size:13px;line-height:1.6;color:#60768b}
 .login-note button{margin-top:12px;border:0;border-radius:11px;background:var(--blue);color:#fff;padding:12px 18px;font-weight:800}
@@ -83,7 +84,15 @@ function render(rows){
   const bubble=document.createElement('div');bubble.className='bubble '+(row.sender_role==='customer'?'customer':'admin');
   if(row.message) bubble.append(document.createTextNode(row.message));
   if(row.media_type==='image' && row.media_url){const a=document.createElement('a');a.href=row.media_url;a.target='_blank';const img=document.createElement('img');img.src=row.media_url;img.className='media-preview';img.alt='Foto chat';a.append(img);bubble.append(a);}
-  if(row.media_type==='video' && row.media_url){const v=document.createElement('video');v.src=row.media_url;v.controls=true;v.playsInline=true;v.className='media-preview';bubble.append(v);}
+  if(row.media_type==='video' && row.media_url){
+   const wrap=document.createElement('div');wrap.className='video-preview-wrap';
+   const v=document.createElement('video');v.src=row.media_url;v.controls=true;v.playsInline=true;v.preload='none';v.setAttribute('webkit-playsinline','');v.className='media-preview';v.loading='lazy';
+   v.addEventListener('waiting',()=>{const st=bubble.querySelector('.video-loading');if(st)st.hidden=false;});
+   v.addEventListener('playing',()=>{const st=bubble.querySelector('.video-loading');if(st)st.hidden=true;});
+   v.addEventListener('canplay',()=>{const st=bubble.querySelector('.video-loading');if(st)st.hidden=true;});
+   const st=document.createElement('span');st.className='video-loading';st.hidden=true;st.textContent='Memuat video…';
+   wrap.append(v,st);bubble.append(wrap);
+  }
   if(row.media_type==='location' && row.latitude!=null && row.longitude!=null){const a=document.createElement('a');a.className='location-link';a.href='https://www.google.com/maps?q='+row.latitude+','+row.longitude;a.target='_blank';a.textContent=row.location_label||'Buka lokasi di Google Maps';bubble.append(a);}
   const time=document.createElement('time');time.textContent=new Date(row.created_at).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
   if(row.sender_role==='customer'){
