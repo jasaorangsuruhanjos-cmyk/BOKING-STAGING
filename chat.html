@@ -122,10 +122,10 @@ async function sendChatMessage({message='',file=null,mediaType=null,coords=null}
    message:message||(mediaType==='image'?'Mengirim foto':mediaType==='video'?'Mengirim video':'Membagikan lokasi'),
    media_url:mediaUrl,media_type:mediaType};
   if(coords){row.latitude=coords.latitude;row.longitude=coords.longitude;row.location_label='Lokasi pelanggan';}
-  const {error}=await db.from('jos_chat_messages').insert(row);if(error)throw error;
+  const {data:inserted,error}=await db.from('jos_chat_messages').insert(row).select('id').single();if(error)throw error;
   await db.from('jos_chat_conversations').update({updated_at:new Date().toISOString()}).eq('id',conversationId);
   await load();
-  const notify=await db.functions.invoke('jos-staging-chat',{body:{action:'notify_customer_message',conversation_id:conversationId}});
+  const notify=await db.functions.invoke('jos-staging-chat',{body:{action:'notify_customer_message',conversation_id:conversationId,message_id:inserted.id}});
   $('status').textContent=notify.error||notify.data?.success!==true?'Pesan tersimpan. Notifikasi Telegram belum aktif.':'Pesan terkirim ke Admin JOS.';
  }catch(err){$('status').textContent='Gagal mengirim: '+(err.message||'Coba lagi.');}
  finally{$('send').disabled=false;}
