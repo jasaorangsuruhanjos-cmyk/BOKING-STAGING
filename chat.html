@@ -27,6 +27,10 @@
 .form input{flex:1;min-width:0;border:1px solid #d7e3ed;border-radius:13px;padding:12px;font:inherit;font-size:13px;outline-color:var(--blue)}
 .form button{border:0;border-radius:12px;background:var(--blue);color:#fff;padding:0 17px;font-size:12px;font-weight:850}
 .form button:disabled{opacity:.5}
+.tools{display:flex;gap:8px;padding:8px 12px 0;background:#fff}
+.toolbtn{border:1px solid #d7e3ed;background:#f7fbff;color:#17649e;border-radius:10px;padding:8px 11px;font-size:12px}
+.media-preview{max-width:220px;max-height:220px;border-radius:10px;display:block;margin-top:6px}
+.location-link{display:inline-block;margin-top:6px;color:#0878d1;text-decoration:underline}
 .login-note{margin:auto;padding:22px;text-align:center;font-size:13px;line-height:1.6;color:#60768b}
 .login-note button{margin-top:12px;border:0;border-radius:11px;background:var(--blue);color:#fff;padding:12px 18px;font-weight:800}
 @media(min-width:601px){body{padding:20px 0}.chat-app{height:calc(100dvh - 40px);border-radius:22px;overflow:hidden}}
@@ -42,7 +46,14 @@
 <div class="info">Sampaikan pertanyaan atau kebutuhan Anda. Balasan Admin JOS akan muncul di halaman chat ini.</div>
 <div id="messages"><div class="welcome"><b>Halo! 👋</b>Silakan mulai percakapan dengan Admin JOS.</div></div>
 <div class="status" id="status">Memeriksa akun pelanggan...</div>
-<form class="form" id="form"><input id="message" maxlength="4000" placeholder="Tulis pesan..." autocomplete="off" required><button id="send" type="submit">Kirim</button></form>
+<div class="tools">
+<button class="toolbtn" type="button" id="photoBtn">📷 Foto</button>
+<button class="toolbtn" type="button" id="videoBtn">🎥 Video</button>
+<button class="toolbtn" type="button" id="locationBtn">📍 Share lokasi</button>
+<input id="mediaFile" type="file" accept="image/*" hidden>
+<input id="videoFile" type="file" accept="video/*" hidden>
+</div>
+<form class="form" id="form"><input id="message" maxlength="4000" placeholder="Tulis pesan..." autocomplete="off"><button id="send" type="submit">Kirim</button></form>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -67,7 +78,10 @@ function render(rows){
  if(!rows.length){const welcome=document.createElement('div');welcome.className='welcome';const b=document.createElement('b');b.textContent='Halo! 👋';welcome.append(b,document.createTextNode('Silakan mulai percakapan dengan Admin JOS.'));box.append(welcome);return;}
  rows.forEach(row=>{
   const bubble=document.createElement('div');bubble.className='bubble '+(row.sender_role==='customer'?'customer':'admin');
-  bubble.append(document.createTextNode(row.message));
+  if(row.message) bubble.append(document.createTextNode(row.message));
+  if(row.media_type==='image' && row.media_url){const a=document.createElement('a');a.href=row.media_url;a.target='_blank';const img=document.createElement('img');img.src=row.media_url;img.className='media-preview';img.alt='Foto chat';a.append(img);bubble.append(a);}
+  if(row.media_type==='video' && row.media_url){const v=document.createElement('video');v.src=row.media_url;v.controls=true;v.playsInline=true;v.className='media-preview';bubble.append(v);}
+  if(row.media_type==='location' && row.latitude!=null && row.longitude!=null){const a=document.createElement('a');a.className='location-link';a.href='https://www.google.com/maps?q='+row.latitude+','+row.longitude;a.target='_blank';a.textContent=row.location_label||'Buka lokasi di Google Maps';bubble.append(a);}
   const time=document.createElement('time');time.textContent=new Date(row.created_at).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});bubble.append(time);box.append(bubble);
  });
  box.scrollTop=box.scrollHeight;
@@ -77,25 +91,45 @@ async function load(){
  try{
   const user=await userNow();if(!user){showLogin();return;}
   conversationId=conversationId||await ensureConversation(user);
-  const {data,error}=await db.from('jos_chat_messages').select('id,sender_role,message,created_at').eq('environment','staging').eq('conversation_id',conversationId).order('created_at',{ascending:true}).limit(300);
+  const {data,error}=await db.from('jos_chat_messages').select('id,sender_role,message,created_at,media_url,media_type,latitude,longitude,location_label').eq('environment','staging').eq('conversation_id',conversationId).order('created_at',{ascending:true}).limit(300);
   if(error)throw error;render(data||[]);$('status').textContent='Percakapan Anda tersimpan dengan aman.';
  }catch(e){$('status').textContent='Chat belum dapat dimuat: '+(e.message||'Periksa koneksi.');}
  finally{busy=false;}
 }
-$('form').addEventListener('submit',async e=>{
- e.preventDefault();const message=$('message').value.trim();if(!message)return;
- $('send').disabled=true;$('status').textContent='Mengirim pesan...';
+async function sendChatMessage({message='',file=null,mediaType=null,coords=null}){
+ $('send').disabled=true;$('status').textContent='Mengirim...';
  try{
   const user=await userNow();if(!user)throw new Error('Silakan login kembali.');
   conversationId=conversationId||await ensureConversation(user);
-  const {error}=await db.from('jos_chat_messages').insert({environment:'staging',conversation_id:conversationId,customer_id:user.id,sender_role:'customer',message});
-  if(error)throw error;
+  let mediaUrl=null;
+  if(file){
+   const ext=(file.name.split('.').pop()|| (mediaType==='image'?'jpg':'mp4')).toLowerCase().replace(/[^a-z0-9]/g,'');
+   const path=user.id+'/'+crypto.randomUUID()+'.'+ext;
+   const {error:upErr}=await db.storage.from('jos-chat-staging').upload(path,file,{contentType:file.type,upsert:false});
+   if(upErr)throw upErr;
+   mediaUrl=db.storage.from('jos-chat-staging').getPublicUrl(path).data.publicUrl;
+  }
+  const row={environment:'staging',conversation_id:conversationId,customer_id:user.id,sender_role:'customer',
+   message:message||(mediaType==='image'?'Mengirim foto':mediaType==='video'?'Mengirim video':'Membagikan lokasi'),
+   media_url:mediaUrl,media_type:mediaType};
+  if(coords){row.latitude=coords.latitude;row.longitude=coords.longitude;row.location_label='Lokasi pelanggan';}
+  const {error}=await db.from('jos_chat_messages').insert(row);if(error)throw error;
   await db.from('jos_chat_conversations').update({updated_at:new Date().toISOString()}).eq('id',conversationId);
-  $('message').value='';await load();
+  await load();
   const notify=await db.functions.invoke('jos-staging-chat',{body:{action:'notify_customer_message',conversation_id:conversationId}});
-  $('status').textContent=notify.error||notify.data?.success!==true?'Pesan tersimpan. Notifikasi Telegram admin belum aktif.':'Pesan terkirim ke Admin JOS.';
- }catch(err){$('status').textContent='Pesan gagal dikirim: '+(err.message||'Coba lagi.');}
- finally{$('send').disabled=false;$('message').focus();}
+  $('status').textContent=notify.error||notify.data?.success!==true?'Pesan tersimpan. Notifikasi Telegram belum aktif.':'Pesan terkirim ke Admin JOS.';
+ }catch(err){$('status').textContent='Gagal mengirim: '+(err.message||'Coba lagi.');}
+ finally{$('send').disabled=false;}
+}
+$('form').addEventListener('submit',async e=>{e.preventDefault();const message=$('message').value.trim();if(!message)return;$('message').value='';await sendChatMessage({message});});
+$('photoBtn').addEventListener('click',()=>$('mediaFile').click());
+$('videoBtn').addEventListener('click',()=>$('videoFile').click());
+$('mediaFile').addEventListener('change',async e=>{const file=e.target.files[0];if(file){if(file.size>50*1024*1024){$('status').textContent='Ukuran file maksimal 50 MB.';}else await sendChatMessage({file,mediaType:'image'});}e.target.value='';});
+$('videoFile').addEventListener('change',async e=>{const file=e.target.files[0];if(file){if(file.size>50*1024*1024){$('status').textContent='Ukuran file maksimal 50 MB.';}else await sendChatMessage({file,mediaType:'video'});}e.target.value='';});
+$('locationBtn').addEventListener('click',()=>{
+ if(!navigator.geolocation){$('status').textContent='Perangkat tidak mendukung lokasi.';return;}
+ $('status').textContent='Mengambil lokasi...';
+ navigator.geolocation.getCurrentPosition(async pos=>{await sendChatMessage({mediaType:'location',coords:{latitude:pos.coords.latitude,longitude:pos.coords.longitude}});},err=>{$('status').textContent='Izin lokasi gagal atau ditolak: '+err.message;},{enableHighAccuracy:true,timeout:15000});
 });
 (async()=>{try{const user=await userNow();if(!user){showLogin();return;}await load();pollTimer=setInterval(load,5000);}catch(e){$('status').textContent='Gagal memeriksa sesi: '+e.message;}})();
 </script>
