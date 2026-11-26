@@ -48,14 +48,14 @@ video.media-preview{width:250px;background:#15283a}
 <div id="messages"><div class="welcome"><b>💬 Chat Pesanan</b>Silakan tunggu, percakapan sedang dimuat.</div></div>
 <div class="notice" id="closedNotice">Pesanan ini sudah ditutup. Chat tidak dapat digunakan lagi.</div>
 <div class="status" id="status">Menghubungkan chat...</div>
-<div class="tools" id="tools">
+<div class="tools" id="tools" style="display:none">
 <button class="toolbtn" type="button" id="photoBtn">📷 Foto</button>
 <button class="toolbtn" type="button" id="videoBtn">🎥 Video</button>
 <button class="toolbtn" type="button" id="locationBtn">📍 Sharelok</button>
 <input id="photoFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
 <input id="videoFile" type="file" accept="video/mp4,video/webm,video/quicktime" hidden>
 </div>
-<form class="form" id="form">
+<form class="form" id="form" style="display:none">
 <input id="message" maxlength="4000" placeholder="Tulis pesan..." autocomplete="off">
 <button id="send" type="submit">Kirim</button>
 </form>
@@ -141,13 +141,14 @@ async function displayRow(row){
  addMessage(row,url);
 }
 async function loadMessages(){
+ $('messages').replaceChildren();
  const {data,error}=await db.from('jos_order_chat_messages')
   .select('id,environment,order_id,sender_id,sender_role,message,media_type,media_path,latitude,longitude,location_label,is_blocked,created_at')
   .eq('order_id',orderId).eq('environment',environment).eq('is_blocked',false)
   .order('created_at',{ascending:true}).limit(300);
  if(error)throw error;
  for(const row of (data||[]))await displayRow(row);
- if(!(data||[]).length){const box=$('messages');if(!box.children.length){const w=document.createElement('div');w.className='welcome';const b=document.createElement('b');b.textContent='💬 Mulai percakapan';w.append(b,document.createTextNode('Gunakan chat ini untuk koordinasi pekerjaan.'));box.append(w);}}
+ if(!(data||[]).length){const w=document.createElement('div');w.className='welcome';const b=document.createElement('b');b.textContent='💬 Mulai percakapan';w.append(b,document.createTextNode('Gunakan chat ini untuk koordinasi pekerjaan.'));$('messages').append(w);}
  $('messages').scrollTop=$('messages').scrollHeight;
 }
 function subscribe(){
@@ -254,7 +255,9 @@ async function start(){
  $('chatSubtitle').textContent='Kode pesanan '+(order.kode_order||'');
  $('orderInfo').textContent=(order.nama_layanan||'Pesanan JOS')+' • '+(order.status||'Aktif')+' • Percakapan khusus pesanan ini.';
  if(isClosed(order.status)){closeChat('Pesanan sudah selesai atau dibatalkan. Chat dinonaktifkan.');return;}
+ $('tools').style.display='flex';$('form').style.display='flex';
  subscribe();await loadMessages();setStatus('Terhubung • Pesan diperbarui secara real-time.');
+ setInterval(async()=>{try{const latest=await db.from('orders').select('status').eq('id',orderId).maybeSingle();if(!latest.error&&(!latest.data||isClosed(latest.data.status)))closeChat('Pesanan sudah selesai atau dibatalkan. Chat dinonaktifkan.');}catch(_){}},15000);
 }
 $('back').addEventListener('click',()=>{
  try{if(window.JosAndroid&&typeof window.JosAndroid.goHome==='function'){window.JosAndroid.goHome();return;}}catch(_){}
