@@ -65,6 +65,15 @@ jobs:
           import re
           p=Path("android/app/src/main/AndroidManifest.xml")
           s=p.read_text()
+          permissions = [
+              '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />',
+              '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
+          ]
+          for permission in permissions:
+              if permission not in s:
+                  pos=s.find('<application')
+                  if pos < 0: raise SystemExit("Android application tag not found")
+                  s=s[:pos]+permission+'\n    '+s[pos:]
           marker='android:scheme="josapp"'
           if marker not in s:
               intent='''<intent-filter>

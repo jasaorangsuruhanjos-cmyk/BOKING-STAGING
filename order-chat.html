@@ -220,14 +220,19 @@ async function sendPayload(payload){
  }catch(e){setStatus('Gagal mengirim: '+(e.message||'Periksa koneksi.'),true);if(uploadedPath){try{await db.storage.from(BUCKET).remove([uploadedPath]);}catch(_){}}}
  finally{busy=false;$('send').disabled=false;$('photoBtn').disabled=false;$('videoBtn').disabled=false;$('locationBtn').disabled=false;}
 }
-function getLocation(){
- return new Promise((resolve,reject)=>{
-  const plugin=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Geolocation;
-  if(plugin&&plugin.getCurrentPosition){
-   plugin.getCurrentPosition({enableHighAccuracy:true,timeout:20000}).then(p=>resolve({latitude:p.coords.latitude,longitude:p.coords.longitude})).catch(reject);
-   return;
+async function getLocation(){
+ const plugin=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Geolocation;
+ if(plugin&&plugin.getCurrentPosition){
+  if(plugin.checkPermissions&&plugin.requestPermissions){
+   let permission=await plugin.checkPermissions();
+   if(permission.location!=='granted'&&permission.coarseLocation!=='granted')permission=await plugin.requestPermissions();
+   if(permission.location!=='granted'&&permission.coarseLocation!=='granted')throw new Error('Izin lokasi ditolak. Aktifkan izin lokasi JOS di pengaturan perangkat.');
   }
-  if(!navigator.geolocation){reject(new Error('Perangkat tidak mendukung GPS.'));return;}
+  const p=await plugin.getCurrentPosition({enableHighAccuracy:true,timeout:20000,maximumAge:0});
+  return {latitude:p.coords.latitude,longitude:p.coords.longitude};
+ }
+ if(!navigator.geolocation)throw new Error('Perangkat tidak mendukung GPS.');
+ return await new Promise((resolve,reject)=>{
   navigator.geolocation.getCurrentPosition(p=>resolve({latitude:p.coords.latitude,longitude:p.coords.longitude}),e=>reject(new Error(e.message||'Izin lokasi belum diberikan.')),{enableHighAccuracy:true,timeout:20000,maximumAge:0});
  });
 }
