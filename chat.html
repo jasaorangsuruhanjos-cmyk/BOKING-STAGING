@@ -86,7 +86,7 @@ function render(rows){
   if(row.media_type==='image' && row.media_url){const a=document.createElement('a');a.href=row.media_url;a.target='_blank';const img=document.createElement('img');img.src=row.media_url;img.className='media-preview';img.alt='Foto chat';a.append(img);bubble.append(a);}
   if(row.media_type==='video' && (row.preview_url||row.media_url)){
    const wrap=document.createElement('div');wrap.className='video-preview-wrap';
-   const v=document.createElement('video');v.src=row.preview_url||row.media_url;v.controls=true;v.playsInline=true;v.preload='none';v.setAttribute('webkit-playsinline','');v.className='media-preview';v.loading='lazy';
+   const v=document.createElement('video');v.src=row.preview_url||row.media_url;v.controls=true;v.playsInline=true;v.preload='metadata';v.setAttribute('webkit-playsinline','');v.className='media-preview';v.loading='lazy';
    v.addEventListener('waiting',()=>{const st=bubble.querySelector('.video-loading');if(st)st.hidden=false;});
    v.addEventListener('playing',()=>{const st=bubble.querySelector('.video-loading');if(st)st.hidden=true;});
    v.addEventListener('canplay',()=>{const st=bubble.querySelector('.video-loading');if(st)st.hidden=true;});
