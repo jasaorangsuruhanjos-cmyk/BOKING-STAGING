@@ -84,9 +84,9 @@ function render(rows){
   const bubble=document.createElement('div');bubble.className='bubble '+(row.sender_role==='customer'?'customer':'admin');
   if(row.message) bubble.append(document.createTextNode(row.message));
   if(row.media_type==='image' && row.media_url){const a=document.createElement('a');a.href=row.media_url;a.target='_blank';const img=document.createElement('img');img.src=row.media_url;img.className='media-preview';img.alt='Foto chat';a.append(img);bubble.append(a);}
-  if(row.media_type==='video' && row.media_url){
+  if(row.media_type==='video' && (row.preview_url||row.media_url)){
    const wrap=document.createElement('div');wrap.className='video-preview-wrap';
-   const v=document.createElement('video');v.src=row.media_url;v.controls=true;v.playsInline=true;v.preload='none';v.setAttribute('webkit-playsinline','');v.className='media-preview';v.loading='lazy';
+   const v=document.createElement('video');v.src=row.preview_url||row.media_url;v.controls=true;v.playsInline=true;v.preload='none';v.setAttribute('webkit-playsinline','');v.className='media-preview';v.loading='lazy';
    v.addEventListener('waiting',()=>{const st=bubble.querySelector('.video-loading');if(st)st.hidden=false;});
    v.addEventListener('playing',()=>{const st=bubble.querySelector('.video-loading');if(st)st.hidden=true;});
    v.addEventListener('canplay',()=>{const st=bubble.querySelector('.video-loading');if(st)st.hidden=true;});
@@ -110,54 +110,85 @@ async function load(){
  try{
   const user=await userNow();if(!user){showLogin();return;}
   conversationId=conversationId||await ensureConversation(user);
-  const {data,error}=await db.from('jos_chat_messages').select('id,sender_role,message,created_at,media_url,media_type,latitude,longitude,location_label,delivery_status,read_at').eq('environment','staging').eq('conversation_id',conversationId).order('created_at',{ascending:true}).limit(300);
+  const {data,error}=await db.from('jos_chat_messages').select('id,sender_role,message,created_at,media_url,media_type,latitude,longitude,location_label,delivery_status,read_at,preview_url').eq('environment','staging').eq('conversation_id',conversationId).order('created_at',{ascending:true}).limit(300);
   if(error)throw error;render(data||[]);$('status').textContent='Percakapan Anda tersimpan dengan aman.';
  }catch(e){$('status').textContent='Chat belum dapat dimuat: '+(e.message||'Periksa koneksi.');}
  finally{busy=false;}
+}
+async function compressVideo720(file){
+ if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream) return null;
+ const sourceUrl=URL.createObjectURL(file),video=document.createElement('video');
+ video.src=sourceUrl;video.muted=true;video.playsInline=true;video.preload='auto';
+ try{
+  await new Promise((resolve,reject)=>{video.onloadedmetadata=resolve;video.onerror=()=>reject(new Error('Video tidak dapat dibaca'));});
+  const scale=Math.min(1,1280/video.videoWidth,720/video.videoHeight);
+  const width=Math.max(2,Math.round(video.videoWidth*scale/2)*2),height=Math.max(2,Math.round(video.videoHeight*scale/2)*2);
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+  const ctx=canvas.getContext('2d');const stream=canvas.captureStream(24);
+  let audioContext=null;
+  try{audioContext=new (window.AudioContext||window.webkitAudioContext)();const source=audioContext.createMediaElementSource(video);const audioOut=audioContext.createMediaStreamDestination();source.connect(audioOut);audioOut.stream.getAudioTracks().forEach(t=>stream.addTrack(t));await audioContext.resume();}catch(_){}
+  const mime=['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/webm;codecs=vp8,opus','video/webm'].find(t=>MediaRecorder.isTypeSupported(t));
+  if(!mime)return null;
+  const recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:1400000,audioBitsPerSecond:96000});
+  const chunks=[];recorder.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data);};
+  const finished=new Promise((resolve,reject)=>{recorder.onstop=()=>resolve(new Blob(chunks,{type:recorder.mimeType}));recorder.onerror=()=>reject(new Error('Kompresi video gagal'));});
+  const draw=()=>{if(video.paused||video.ended)return;ctx.drawImage(video,0,0,width,height);requestAnimationFrame(draw);};
+  await new Promise((resolve,reject)=>{video.onseeked=resolve;video.currentTime=0;setTimeout(resolve,300);});
+  recorder.start(1000);await video.play();draw();
+  await new Promise(resolve=>{video.onended=resolve;});
+  recorder.stop();const blob=await finished;
+  stream.getTracks().forEach(t=>t.stop());if(audioContext)await audioContext.close();
+  if(!blob||blob.size<1000||blob.size>=file.size)return null;
+  const ext=blob.type.includes('mp4')?'mp4':'webm';
+  return new File([blob],file.name.replace(/\.[^.]+$/,'')+'-720p.'+ext,{type:blob.type});
+ }catch(e){return null;}finally{URL.revokeObjectURL(sourceUrl);}
+}
+async function uploadChatFile(file,path,onProgress){
+ if(file.size>6*1024*1024){
+  const {data:{session},error:sessionError}=await db.auth.getSession();
+  if(sessionError||!session?.access_token)throw new Error('Sesi login berakhir. Silakan login ulang.');
+  if(!window.tus?.Upload)throw new Error('Modul unggah belum termuat.');
+  await new Promise(async(resolve,reject)=>{
+   const upload=new window.tus.Upload(file,{endpoint:'https://aqhfkcdglfijdtsgyzmq.storage.supabase.co/storage/v1/upload/resumable',
+    headers:{authorization:'Bearer '+session.access_token},retryDelays:[0,3000,5000,10000,20000],uploadDataDuringCreation:true,removeFingerprintOnSuccess:true,chunkSize:6*1024*1024,
+    metadata:{bucketName:'jos-chat-staging',objectName:path,contentType:file.type||'application/octet-stream',cacheControl:'3600'},
+    onError:reject,onProgress:(sent,total)=>onProgress?.(sent,total),onSuccess:resolve});
+   try{const previous=await upload.findPreviousUploads();if(previous.length)upload.resumeFromPreviousUpload(previous[0]);upload.start();}catch(e){reject(e);}
+  });
+ }else{const {error}=await db.storage.from('jos-chat-staging').upload(path,file,{contentType:file.type,upsert:false});if(error)throw error;}
+ return db.storage.from('jos-chat-staging').getPublicUrl(path).data.publicUrl;
 }
 async function sendChatMessage({message='',file=null,mediaType=null,coords=null}){
  $('send').disabled=true;$('status').textContent=file?'Menyiapkan unggahan…':'Mengirim...';
  try{
   const user=await userNow();if(!user)throw new Error('Silakan login kembali.');
   conversationId=conversationId||await ensureConversation(user);
-  let mediaUrl=null;
+  let mediaUrl=null,previewUrl=null;
   if(file){
-   const ext=(file.name.split('.').pop()|| (mediaType==='image'?'jpg':'mp4')).toLowerCase().replace(/[^a-z0-9]/g,'');
-   const path=user.id+'/'+crypto.randomUUID()+'.'+ext;
-   if(file.size>6*1024*1024){
-    const {data:{session},error:sessionError}=await db.auth.getSession();
-    if(sessionError||!session?.access_token)throw new Error('Sesi login berakhir. Silakan login ulang.');
-    if(!window.tus?.Upload)throw new Error('Modul unggah video belum termuat. Muat ulang halaman dan coba lagi.');
-    await new Promise(async(resolve,reject)=>{
-     const upload=new window.tus.Upload(file,{
-      endpoint:'https://aqhfkcdglfijdtsgyzmq.storage.supabase.co/storage/v1/upload/resumable',
-      headers:{authorization:'Bearer '+session.access_token},
-      retryDelays:[0,3000,5000,10000,20000],
-      uploadDataDuringCreation:true,removeFingerprintOnSuccess:true,
-      chunkSize:6*1024*1024,
-      metadata:{bucketName:'jos-chat-staging',objectName:path,contentType:file.type||'application/octet-stream',cacheControl:'3600'},
-      onError:reject,
-      onProgress:(sent,total)=>{
-       const pct=Math.min(100,Math.round(sent/total*100));
-       $('status').textContent='Mengunggah '+(mediaType==='video'?'video':'foto')+'… '+pct+'% ('+(sent/1048576).toFixed(1)+'/'+(total/1048576).toFixed(1)+' MB)';
-      },
-      onSuccess:resolve
-     });
-     try{
-      const previous=await upload.findPreviousUploads();
-      if(previous.length)upload.resumeFromPreviousUpload(previous[0]);
-      upload.start();
-     }catch(e){reject(e);}
-    });
-   }else{
-    const {error:upErr}=await db.storage.from('jos-chat-staging').upload(path,file,{contentType:file.type,upsert:false});
-    if(upErr)throw upErr;
+   let uploadFile=file;
+   if(mediaType==='video'){
+    $('status').textContent='Mengoptimalkan video untuk chat…';
+    const compressed=await compressVideo720(file);
+    if(compressed){uploadFile=compressed;$('status').textContent='Video dioptimalkan. Menyimpan file…';}
+    else $('status').textContent='Menyimpan video asli…';
    }
-   mediaUrl=db.storage.from('jos-chat-staging').getPublicUrl(path).data.publicUrl;
+   const ext=(uploadFile.name.split('.').pop()||(mediaType==='image'?'jpg':'mp4')).toLowerCase().replace(/[^a-z0-9]/g,'');
+   const path=user.id+'/'+crypto.randomUUID()+'.'+ext;
+   mediaUrl=await uploadChatFile(uploadFile,path,(sent,total)=>{
+    $('status').textContent='Mengunggah '+(mediaType==='video'?'video':'foto')+'… '+Math.round(sent/total*100)+'%';
+   });
+   if(mediaType==='video' && uploadFile!==file){
+    const originalExt=(file.name.split('.').pop()||'mp4').toLowerCase().replace(/[^a-z0-9]/g,'');
+    const originalPath=user.id+'/'+crypto.randomUUID()+'-original.'+originalExt;
+    previewUrl=mediaUrl;
+    await uploadChatFile(file,originalPath,(sent,total)=>{
+     $('status').textContent='Menyimpan video asli… '+Math.round(sent/total*100)+'%';
+    });
+   }
   }
   const row={environment:'staging',conversation_id:conversationId,customer_id:user.id,sender_role:'customer',
    message:message||(mediaType==='image'?'Mengirim foto':mediaType==='video'?'Mengirim video':'Membagikan lokasi'),
-   media_url:mediaUrl,media_type:mediaType};
+   media_url:mediaUrl,preview_url:previewUrl,media_type:mediaType};
   if(coords){row.latitude=coords.latitude;row.longitude=coords.longitude;row.location_label='Lokasi pelanggan';}
   const {data:inserted,error}=await db.from('jos_chat_messages').insert(row).select('id').single();if(error)throw error;
   await db.from('jos_chat_conversations').update({updated_at:new Date().toISOString()}).eq('id',conversationId);
