@@ -2971,3 +2971,107 @@ async function josConfirmOrderCompletion(orderId,button){
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')josClosePhoto();});
 </script>
+
+<style id="jos-staging-chat-style">
+#josStageChatLauncher{position:fixed;right:18px;bottom:98px;z-index:100700;border:0;border-radius:999px;background:#0878d1;color:#fff;padding:13px 17px;font-weight:900;font-size:13px;box-shadow:0 8px 25px #073c6a55}
+#josStageChatPanel{position:fixed;right:12px;bottom:158px;z-index:100701;width:min(370px,calc(100vw - 24px));height:min(520px,calc(100vh - 190px));background:#fff;border:1px solid #dce8f2;border-radius:19px;box-shadow:0 15px 50px #0c294544;display:none;overflow:hidden;flex-direction:column}
+#josStageChatPanel.open{display:flex}
+#josStageChatHead{background:linear-gradient(135deg,#0878d1,#0756a4);color:#fff;padding:14px 15px;display:flex;align-items:center;justify-content:space-between}
+#josStageChatHead strong{font-size:14px}#josStageChatHead small{display:block;font-size:10px;opacity:.85;margin-top:3px}
+#josStageChatClose{border:0;border-radius:50%;width:30px;height:30px;background:#ffffff25;color:#fff;font-size:20px}
+#josStageChatMessages{flex:1;overflow:auto;padding:13px;background:#f5f9fd;display:flex;flex-direction:column;gap:9px}
+.jos-stage-chat-bubble{max-width:86%;padding:9px 11px;border-radius:13px;font-size:12px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.jos-stage-chat-bubble.customer{align-self:flex-end;background:#dff0ff;color:#17476d;border-bottom-right-radius:4px}
+.jos-stage-chat-bubble.admin{align-self:flex-start;background:#fff;border:1px solid #e0e9f1;color:#263e52;border-bottom-left-radius:4px}
+.jos-stage-chat-bubble time{display:block;font-size:9px;opacity:.6;margin-top:4px;text-align:right}
+#josStageChatStatus{padding:5px 13px;background:#fff;color:#738398;font-size:10px;min-height:22px}
+#josStageChatForm{display:flex;gap:7px;padding:10px;border-top:1px solid #e5edf4;background:#fff}
+#josStageChatInput{flex:1;min-width:0;border:1px solid #d7e3ed;border-radius:12px;padding:10px;font:inherit;font-size:12px;outline-color:#0878d1}
+#josStageChatSend{border:0;border-radius:11px;background:#0878d1;color:#fff;padding:0 15px;font-size:12px;font-weight:850}
+#josStageChatSend:disabled{opacity:.5}
+@media(max-width:520px){#josStageChatPanel{right:8px;bottom:151px;width:calc(100vw - 16px);height:min(65vh,540px)}#josStageChatLauncher{right:12px;bottom:94px}}
+</style>
+<button id="josStageChatLauncher" type="button" aria-expanded="false">💬 Chat Admin</button>
+<section id="josStageChatPanel" aria-label="Chat Admin JOS" aria-hidden="true">
+ <header id="josStageChatHead"><div><strong>Chat Admin JOS</strong><small>Pesan langsung melalui aplikasi</small></div><button id="josStageChatClose" type="button" aria-label="Tutup">×</button></header>
+ <div id="josStageChatMessages"><div class="jos-stage-chat-bubble admin">Halo! Ada yang bisa kami bantu?</div></div>
+ <div id="josStageChatStatus">Hubungkan akun untuk mulai chat.</div>
+ <form id="josStageChatForm"><input id="josStageChatInput" maxlength="4000" placeholder="Tulis pesan..." autocomplete="off" required><button id="josStageChatSend" type="submit">Kirim</button></form>
+</section>
+<script id="jos-staging-chat-script">
+(function(){
+ const launcher=document.getElementById('josStageChatLauncher');
+ const panel=document.getElementById('josStageChatPanel');
+ const close=document.getElementById('josStageChatClose');
+ const messages=document.getElementById('josStageChatMessages');
+ const status=document.getElementById('josStageChatStatus');
+ const form=document.getElementById('josStageChatForm');
+ const input=document.getElementById('josStageChatInput');
+ const send=document.getElementById('josStageChatSend');
+ if(!launcher||!panel||!form)return;
+ let conversationId=null, poller=null, loading=false;
+ const escapeText=v=>String(v??'');
+ function setOpen(open){panel.classList.toggle('open',open);panel.setAttribute('aria-hidden',String(!open));launcher.setAttribute('aria-expanded',String(open));if(open){loadMessages();if(!poller)poller=setInterval(loadMessages,5000);}else if(poller){clearInterval(poller);poller=null;}}
+ launcher.addEventListener('click',()=>setOpen(!panel.classList.contains('open')));
+ close.addEventListener('click',()=>setOpen(false));
+ async function currentUser(){
+  if(!window.josDb?.auth)return null;
+  const {data,error}=await josDb.auth.getUser();
+  if(error)throw error;
+  return data?.user||null;
+ }
+ async function getConversation(user){
+  const {data,error}=await josDb.from('jos_chat_conversations').select('id')
+   .eq('environment','staging').eq('customer_id',user.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
+  if(error)throw error;
+  if(data)return data.id;
+  const created=await josDb.from('jos_chat_conversations').insert({environment:'staging',customer_id:user.id,subject:'Bantuan JOS'})
+   .select('id').single();
+  if(created.error)throw created.error;
+  return created.data.id;
+ }
+ function renderRows(rows){
+  messages.replaceChildren();
+  if(!rows?.length){const welcome=document.createElement('div');welcome.className='jos-stage-chat-bubble admin';welcome.textContent='Halo! Silakan tulis kebutuhan atau pertanyaan Anda. Admin JOS akan membalas di sini.';messages.append(welcome);return;}
+  rows.forEach(row=>{
+   const bubble=document.createElement('div');bubble.className='jos-stage-chat-bubble '+(row.sender_role==='customer'?'customer':'admin');
+   bubble.append(document.createTextNode(escapeText(row.message)));
+   const time=document.createElement('time');time.textContent=new Date(row.created_at).toLocaleString('id-ID',{hour:'2-digit',minute:'2-digit'});bubble.append(time);messages.append(bubble);
+  });
+  messages.scrollTop=messages.scrollHeight;
+ }
+ async function loadMessages(){
+  if(loading)return;loading=true;
+  try{
+   const user=await currentUser();
+   if(!user){status.textContent='Silakan login ke akun pelanggan JOS untuk menggunakan chat.';return;}
+   conversationId=conversationId||await getConversation(user);
+   const {data,error}=await josDb.from('jos_chat_messages').select('id,sender_role,message,created_at')
+    .eq('environment','staging').eq('conversation_id',conversationId).order('created_at',{ascending:true}).limit(200);
+   if(error)throw error;
+   renderRows(data||[]);status.textContent='Chat tersambung • Admin membalas melalui Telegram JOS.';
+  }catch(e){status.textContent='Chat belum dapat dimuat: '+(e.message||'Periksa koneksi dan login.');}
+  finally{loading=false;}
+ }
+ form.addEventListener('submit',async e=>{
+  e.preventDefault();const message=input.value.trim();if(!message)return;
+  send.disabled=true;status.textContent='Mengirim pesan...';
+  try{
+   const user=await currentUser();if(!user)throw new Error('Silakan login terlebih dahulu.');
+   conversationId=conversationId||await getConversation(user);
+   const {error}=await josDb.from('jos_chat_messages').insert({
+    environment:'staging',conversation_id:conversationId,customer_id:user.id,sender_role:'customer',message
+   });
+   if(error)throw error;
+   await josDb.from('jos_chat_conversations').update({updated_at:new Date().toISOString()}).eq('id',conversationId);
+   input.value='';await loadMessages();
+   const notify=await josDb.functions.invoke('jos-staging-chat',{body:{action:'notify_customer_message',conversation_id:conversationId}});
+   if(notify.error||notify.data?.success!==true){
+    status.textContent='Pesan tersimpan. Notifikasi Telegram admin belum aktif; admin tetap dapat melihat pesan di database staging.';
+   }else status.textContent='Pesan terkirim ke Admin JOS.';
+  }catch(err){status.textContent='Pesan gagal dikirim: '+(err.message||'Coba lagi.');}
+  finally{send.disabled=false;input.focus();}
+ });
+})();
+</script>
+
