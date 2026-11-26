@@ -53,8 +53,8 @@ const db=window.supabase.createClient(
 );
 const $=id=>document.getElementById(id);
 let conversationId=null,pollTimer=null,busy=false;
-$('back').addEventListener('click',()=>{if(history.length>1)history.back();else location.href='./';});
-function showLogin(){ $('messages').innerHTML='<div class="login-note">Anda perlu login ke akun pelanggan JOS untuk menggunakan chat.<br><button type="button" onclick="location.href='./'">Kembali dan Login</button></div>'; $('form').style.display='none';$('status').textContent='Login diperlukan';}
+$('back').addEventListener('click',()=>{location.href='./index.html';});
+function showLogin(){ const note=document.createElement('div');note.className='login-note';note.append(document.createTextNode('Anda perlu login ke akun pelanggan JOS untuk menggunakan chat.'));note.append(document.createElement('br'));const back=document.createElement('button');back.type='button';back.textContent='Kembali dan Login';back.addEventListener('click',()=>{location.href='./index.html';});note.append(back);$('messages').replaceChildren(note);$('form').style.display='none';$('status').textContent='Login diperlukan';}
 async function userNow(){const {data,error}=await db.auth.getUser();if(error)throw error;return data.user;}
 async function ensureConversation(user){
  const {data,error}=await db.from('jos_chat_conversations').select('id').eq('environment','staging').eq('customer_id',user.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
