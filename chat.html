@@ -78,32 +78,54 @@ async function ensureConversation(user){
  if(created.error)throw created.error;return created.data.id;
 }
 function render(rows){
- const box=$('messages');box.replaceChildren();
- if(!rows.length){const welcome=document.createElement('div');welcome.className='welcome';const b=document.createElement('b');b.textContent='Halo! 👋';welcome.append(b,document.createTextNode('Silakan mulai percakapan dengan Admin JOS.'));box.append(welcome);return;}
- rows.forEach(row=>{
-  const bubble=document.createElement('div');bubble.className='bubble '+(row.sender_role==='customer'?'customer':'admin');
-  if(row.message) bubble.append(document.createTextNode(row.message));
-  if(row.media_type==='image' && row.media_url){const a=document.createElement('a');a.href=row.media_url;a.target='_blank';const img=document.createElement('img');img.src=row.media_url;img.className='media-preview';img.alt='Foto chat';a.append(img);bubble.append(a);}
-  if(row.media_type==='video' && (row.preview_url||row.media_url)){
-   const wrap=document.createElement('div');wrap.className='video-preview-wrap';
-   const v=document.createElement('video');v.src=row.preview_url||row.media_url;v.controls=true;v.playsInline=true;v.preload='metadata';v.setAttribute('webkit-playsinline','');v.className='media-preview';v.loading='lazy';
-   v.addEventListener('waiting',()=>{const st=bubble.querySelector('.video-loading');if(st)st.hidden=false;});
-   v.addEventListener('playing',()=>{const st=bubble.querySelector('.video-loading');if(st)st.hidden=true;});
-   v.addEventListener('canplay',()=>{const st=bubble.querySelector('.video-loading');if(st)st.hidden=true;});
-   const st=document.createElement('span');st.className='video-loading';st.hidden=true;st.textContent='Memuat video…';
-   wrap.append(v,st);bubble.append(wrap);
+ const box=$('messages');let added=false;
+ if(!rows.length){
+  if(!box.querySelector('.welcome')){
+   const welcome=document.createElement('div');welcome.className='welcome';const title=document.createElement('b');title.textContent='Halo! 👋';
+   welcome.append(title,document.createTextNode('Silakan mulai percakapan dengan Admin JOS.'));box.replaceChildren(welcome);
   }
-  if(row.media_type==='location' && row.latitude!=null && row.longitude!=null){const a=document.createElement('a');a.className='location-link';a.href='https://www.google.com/maps?q='+row.latitude+','+row.longitude;a.target='_blank';a.textContent=row.location_label||'Buka lokasi di Google Maps';bubble.append(a);}
+  return;
+ }
+ const welcome=box.querySelector('.welcome');if(welcome)welcome.remove();
+ rows.forEach(row=>{
+  let bubble=box.querySelector('[data-message-id="'+row.id+'"]');
+  if(bubble){
+   const ticks=bubble.querySelector('.ticks');
+   if(ticks){
+    ticks.className='ticks'+(row.delivery_status==='read'?' read':'');
+    ticks.textContent=row.delivery_status==='sent'?'✓':'✓✓';
+    ticks.title=row.delivery_status==='read'?'Admin sudah membalas percakapan ini':row.delivery_status==='delivered'?'Notifikasi diterima Telegram admin':'Pesan tersimpan';
+   }
+   return;
+  }
+  bubble=document.createElement('div');bubble.dataset.messageId=row.id;
+  bubble.className='bubble '+(row.sender_role==='customer'?'customer':'admin');
+  if(row.message)bubble.append(document.createTextNode(row.message));
+  if(row.media_type==='image'&&row.media_url){
+   const link=document.createElement('a');link.href=row.media_url;link.target='_blank';link.rel='noopener';
+   const img=document.createElement('img');img.src=row.media_url;img.className='media-preview';img.alt='Foto chat';link.append(img);bubble.append(link);
+  }
+  if(row.media_type==='video'&&(row.preview_url||row.media_url)){
+   const wrap=document.createElement('div');wrap.className='video-preview-wrap';
+   const video=document.createElement('video');video.src=row.preview_url||row.media_url;video.controls=true;video.playsInline=true;video.preload='metadata';video.setAttribute('webkit-playsinline','');video.className='media-preview';
+   video.addEventListener('waiting',()=>{const status=bubble.querySelector('.video-loading');if(status)status.hidden=false;});
+   video.addEventListener('playing',()=>{const status=bubble.querySelector('.video-loading');if(status)status.hidden=true;});
+   video.addEventListener('canplay',()=>{const status=bubble.querySelector('.video-loading');if(status)status.hidden=true;});
+   const status=document.createElement('span');status.className='video-loading';status.hidden=true;status.textContent='Memuat video…';
+   wrap.append(video,status);bubble.append(wrap);
+  }
+  if(row.media_type==='location'&&row.latitude!=null&&row.longitude!=null){
+   const link=document.createElement('a');link.className='location-link';link.href='https://www.google.com/maps?q='+row.latitude+','+row.longitude;link.target='_blank';link.rel='noopener';link.textContent=row.location_label||'Buka lokasi di Google Maps';bubble.append(link);
+  }
   const time=document.createElement('time');time.textContent=new Date(row.created_at).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
   if(row.sender_role==='customer'){
    const ticks=document.createElement('span');ticks.className='ticks'+(row.delivery_status==='read'?' read':'');
-   ticks.textContent=row.delivery_status==='sent'?'✓': '✓✓';
-   ticks.title=row.delivery_status==='read'?'Admin sudah membalas percakapan ini':row.delivery_status==='delivered'?'Notifikasi diterima Telegram admin':'Pesan tersimpan';
-   time.append(ticks);
+   ticks.textContent=row.delivery_status==='sent'?'✓':'✓✓';
+   ticks.title=row.delivery_status==='read'?'Admin sudah membalas percakapan ini':row.delivery_status==='delivered'?'Notifikasi diterima Telegram admin':'Pesan tersimpan';time.append(ticks);
   }
-  bubble.append(time);box.append(bubble);
+  bubble.append(time);box.append(bubble);added=true;
  });
- box.scrollTop=box.scrollHeight;
+ if(added)box.scrollTop=box.scrollHeight;
 }
 async function load(){
  if(busy)return;busy=true;
