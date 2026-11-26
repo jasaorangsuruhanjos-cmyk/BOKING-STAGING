@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "index.html"
+      - "order-chat.html"
       - "manifest.json"
       - "service-worker.js"
       - "package.json"
@@ -47,6 +48,7 @@ jobs:
           set -euo pipefail
           mkdir -p www
           cp index.html www/index.html
+          cp order-chat.html www/order-chat.html
           cp manifest.json service-worker.js jos-icon-192.png jos-icon-512.png www/
 
       - name: Install Capacitor
