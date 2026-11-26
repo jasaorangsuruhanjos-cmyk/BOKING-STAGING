@@ -91,7 +91,7 @@ function contactBlocked(value){
  return /(^|[^\p{L}\p{N}])(nomor|nomer|no\.?)[ ._-]*(wa|whatsapp|hp|handphone|telp|telepon|kontak)([^\p{L}\p{N}]|$)/iu.test(s)
   || /(^|[^\p{L}\p{N}])(wa|whatsapp|hp|handphone|telp|telepon)[ ._-]*(kamu|anda|saya|mitra|pelanggan|pribadi|langsung|berapa)([^\p{L}\p{N}]|$)/iu.test(s)
   || /(minta|kirim|kasih|bagi|share|tukar|hubungi|telepon|chat).{0,30}(wa|whatsapp|hp|handphone|telp|telepon|nomor|nomer|kontak)/iu.test(s)
-  || /(^|\D)(?:\+?62|0)8[\d .()\-]{6,15}\d(?:\D|$)/.test(s);
+  || /(?:08\d{7,12}|628\d{7,12}|8\d{8,12})/.test(s.replace(/\D/g,''));
 }
 function showLogin(message){
  $('orderInfo').textContent=message;
