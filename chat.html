@@ -118,7 +118,7 @@ async function load(){
 async function compressVideo720(file){
  if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream) return null;
  const sourceUrl=URL.createObjectURL(file),video=document.createElement('video');
- video.src=sourceUrl;video.muted=true;video.playsInline=true;video.preload='auto';
+ video.src=sourceUrl;video.muted=false;video.playsInline=true;video.preload='auto';
  try{
   await new Promise((resolve,reject)=>{video.onloadedmetadata=resolve;video.onerror=()=>reject(new Error('Video tidak dapat dibaca'));});
   const scale=Math.min(1,1280/video.videoWidth,720/video.videoHeight);
@@ -163,7 +163,7 @@ async function sendChatMessage({message='',file=null,mediaType=null,coords=null}
  try{
   const user=await userNow();if(!user)throw new Error('Silakan login kembali.');
   conversationId=conversationId||await ensureConversation(user);
-  let mediaUrl=null,previewUrl=null;
+  let mediaUrl=null,previewUrl=null,originalMediaUrl=null;
   if(file){
    let uploadFile=file;
    if(mediaType==='video'){
@@ -181,14 +181,14 @@ async function sendChatMessage({message='',file=null,mediaType=null,coords=null}
     const originalExt=(file.name.split('.').pop()||'mp4').toLowerCase().replace(/[^a-z0-9]/g,'');
     const originalPath=user.id+'/'+crypto.randomUUID()+'-original.'+originalExt;
     previewUrl=mediaUrl;
-    await uploadChatFile(file,originalPath,(sent,total)=>{
+    originalMediaUrl=await uploadChatFile(file,originalPath,(sent,total)=>{
      $('status').textContent='Menyimpan video asli… '+Math.round(sent/total*100)+'%';
     });
    }
   }
   const row={environment:'staging',conversation_id:conversationId,customer_id:user.id,sender_role:'customer',
    message:message||(mediaType==='image'?'Mengirim foto':mediaType==='video'?'Mengirim video':'Membagikan lokasi'),
-   media_url:mediaUrl,preview_url:previewUrl,media_type:mediaType};
+   media_url:mediaUrl,preview_url:previewUrl,original_media_url:originalMediaUrl,media_type:mediaType};
   if(coords){row.latitude=coords.latitude;row.longitude=coords.longitude;row.location_label='Lokasi pelanggan';}
   const {data:inserted,error}=await db.from('jos_chat_messages').insert(row).select('id').single();if(error)throw error;
   await db.from('jos_chat_conversations').update({updated_at:new Date().toISOString()}).eq('id',conversationId);
