@@ -78,7 +78,7 @@ async function ensureConversation(user){
  if(created.error)throw created.error;return created.data.id;
 }
 function render(rows){
- const box=$('messages');let added=false;
+ const box=$('messages');let added=false;const nearBottom=(box.scrollHeight-box.scrollTop-box.clientHeight)<100;
  if(!rows.length){
   if(!box.querySelector('.welcome')){
    const welcome=document.createElement('div');welcome.className='welcome';const title=document.createElement('b');title.textContent='Halo! 👋';
@@ -125,7 +125,7 @@ function render(rows){
   }
   bubble.append(time);box.append(bubble);added=true;
  });
- if(added)box.scrollTop=box.scrollHeight;
+ if(added&&nearBottom)box.scrollTop=box.scrollHeight;
 }
 async function load(){
  if(busy)return;busy=true;
