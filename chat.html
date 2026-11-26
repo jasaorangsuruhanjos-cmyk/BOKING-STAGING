@@ -58,6 +58,7 @@
 <form class="form" id="form"><input id="message" maxlength="4000" placeholder="Tulis pesan..." autocomplete="off"><button id="send" type="submit">Kirim</button></form>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/tus-js-client@4/dist/tus.min.js"></script>
 <script>
 const db=window.supabase.createClient(
  'https://aqhfkcdglfijdtsgyzmq.supabase.co',
@@ -106,7 +107,7 @@ async function load(){
  finally{busy=false;}
 }
 async function sendChatMessage({message='',file=null,mediaType=null,coords=null}){
- $('send').disabled=true;$('status').textContent='Mengirim...';
+ $('send').disabled=true;$('status').textContent=file?'Menyiapkan unggahan…':'Mengirim...';
  try{
   const user=await userNow();if(!user)throw new Error('Silakan login kembali.');
   conversationId=conversationId||await ensureConversation(user);
@@ -114,8 +115,35 @@ async function sendChatMessage({message='',file=null,mediaType=null,coords=null}
   if(file){
    const ext=(file.name.split('.').pop()|| (mediaType==='image'?'jpg':'mp4')).toLowerCase().replace(/[^a-z0-9]/g,'');
    const path=user.id+'/'+crypto.randomUUID()+'.'+ext;
-   const {error:upErr}=await db.storage.from('jos-chat-staging').upload(path,file,{contentType:file.type,upsert:false});
-   if(upErr)throw upErr;
+   if(file.size>6*1024*1024){
+    const {data:{session},error:sessionError}=await db.auth.getSession();
+    if(sessionError||!session?.access_token)throw new Error('Sesi login berakhir. Silakan login ulang.');
+    if(!window.tus?.Upload)throw new Error('Modul unggah video belum termuat. Muat ulang halaman dan coba lagi.');
+    await new Promise(async(resolve,reject)=>{
+     const upload=new window.tus.Upload(file,{
+      endpoint:'https://aqhfkcdglfijdtsgyzmq.storage.supabase.co/storage/v1/upload/resumable',
+      headers:{authorization:'Bearer '+session.access_token},
+      retryDelays:[0,3000,5000,10000,20000],
+      uploadDataDuringCreation:true,removeFingerprintOnSuccess:true,
+      chunkSize:6*1024*1024,
+      metadata:{bucketName:'jos-chat-staging',objectName:path,contentType:file.type||'application/octet-stream',cacheControl:'3600'},
+      onError:reject,
+      onProgress:(sent,total)=>{
+       const pct=Math.min(100,Math.round(sent/total*100));
+       $('status').textContent='Mengunggah '+(mediaType==='video'?'video':'foto')+'… '+pct+'% ('+(sent/1048576).toFixed(1)+'/'+(total/1048576).toFixed(1)+' MB)';
+      },
+      onSuccess:resolve
+     });
+     try{
+      const previous=await upload.findPreviousUploads();
+      if(previous.length)upload.resumeFromPreviousUpload(previous[0]);
+      upload.start();
+     }catch(e){reject(e);}
+    });
+   }else{
+    const {error:upErr}=await db.storage.from('jos-chat-staging').upload(path,file,{contentType:file.type,upsert:false});
+    if(upErr)throw upErr;
+   }
    mediaUrl=db.storage.from('jos-chat-staging').getPublicUrl(path).data.publicUrl;
   }
   const row={environment:'staging',conversation_id:conversationId,customer_id:user.id,sender_role:'customer',
