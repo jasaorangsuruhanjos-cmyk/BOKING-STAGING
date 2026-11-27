@@ -96,7 +96,8 @@ function showTyping(){
  typingIndicator=document.createElement('div');typingIndicator.className='typing-indicator';typingIndicator.setAttribute('aria-label','JOS sedang mengetik');
  const label=document.createElement('span');label.className='typing-word';label.setAttribute('aria-hidden','true');
  for(const char of 'JOS sedang mengetik'){
-  const letter=document.createElement('span');letter.className='typing-letter';letter.textContent=char===' '?' ':char;label.append(letter);
+  if(char===' '){label.append(document.createTextNode(' '));continue;}
+  const letter=document.createElement('span');letter.className='typing-letter';letter.textContent=char;label.append(letter);
  }
  typingIndicator.append(label);
  for(let i=0;i<3;i++){const dot=document.createElement('span');dot.className='dot';dot.textContent='.';typingIndicator.append(dot);}
