@@ -68,7 +68,7 @@ const db=window.supabase.createClient(
 );
 const $=id=>document.getElementById(id);
 let conversationId=null,pollTimer=null,busy=false;
-let firstRenderDone=false,typingIndicator=null;
+let firstRenderDone=false,typingIndicator=null,typingActive=false;
 $('back').addEventListener('click',()=>{location.href='./index.html';});
 function showLogin(){ const note=document.createElement('div');note.className='login-note';note.append(document.createTextNode('Anda perlu login ke akun pelanggan JOS untuk menggunakan chat.'));note.append(document.createElement('br'));const back=document.createElement('button');back.type='button';back.textContent='Kembali dan Login';back.addEventListener('click',()=>{location.href='./index.html';});note.append(back);$('messages').replaceChildren(note);$('form').style.display='none';$('status').textContent='Login diperlukan';}
 async function userNow(){const {data,error}=await db.auth.getUser();if(error)throw error;return data.user;}
@@ -136,6 +136,7 @@ function render(rows){
  }
  const welcome=box.querySelector('.welcome');if(welcome)welcome.remove();
  rows.forEach(row=>{
+  if(typingActive && row.sender_role!=='customer')return;
   let bubble=box.querySelector('[data-message-id="'+row.id+'"]');
   if(bubble){
    const ticks=bubble.querySelector('.ticks');
@@ -266,9 +267,15 @@ async function sendChatMessage({message='',file=null,mediaType=null,coords=null}
   // AI Groq hanya dipanggil dari chat staging; tidak mengubah alur website produksi.
   let aiResult=null;
   if(!file && message){
+   typingActive=true;
    showTyping();
    $('status').textContent='JOS sedang mengetik...';
+   const typingStartedAt=Date.now();
    aiResult=await db.functions.invoke('jos-staging-ai',{body:{environment:'staging',conversation_id:conversationId,message_id:inserted.id}});
+   // Jaga agar indikator sempat terlihat, lalu baru tampilkan balasan AI.
+   const remaining=Math.max(0,1600-(Date.now()-typingStartedAt));
+   if(remaining)await new Promise(resolve=>setTimeout(resolve,remaining));
+   typingActive=false;
   }
   await load();
   hideTyping();
