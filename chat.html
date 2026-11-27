@@ -19,7 +19,7 @@
 .bubble{max-width:86%;padding:10px 12px;border-radius:15px;font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:0 2px 5px #153b5a0b}
 .bubble.customer{align-self:flex-end;background:#dff0ff;color:#17476d;border-bottom-right-radius:4px}
 .bubble.admin{align-self:flex-start;background:#fff;border:1px solid #e1eaf2;color:#263e52;border-bottom-left-radius:4px}
-.bubble time{display:block;font-size:9px;opacity:.58;margin-top:5px;text-align:right}
+.bubble strong{font-weight:750;color:#173f60}.bubble time{display:block;font-size:9px;opacity:.58;margin-top:5px;text-align:right}
 .ticks{font-size:12px;letter-spacing:-3px;margin-left:5px;color:#8495a5}
 .ticks.read{color:#1688e8}
 .welcome{margin:auto;text-align:center;max-width:280px;color:#6e8296;font-size:12px;line-height:1.6}
@@ -77,6 +77,18 @@ async function ensureConversation(user){
  const created=await db.from('jos_chat_conversations').insert({environment:'staging',customer_id:user.id,subject:'Bantuan JOS'}).select('id').single();
  if(created.error)throw created.error;return created.data.id;
 }
+function appendFormattedText(target,text){
+ const parts=String(text).split(/(\\*\\*[^*]+\\*\\*)/g);
+ parts.forEach(part=>{
+  if(!part)return;
+  if(part.startsWith('**')&&part.endsWith('**')&&part.length>4){
+   const strong=document.createElement('strong');strong.textContent=part.slice(2,-2);target.append(strong);
+  }else{
+   const lines=part.split('\\n');
+   lines.forEach((line,index)=>{if(index)target.append(document.createElement('br'));if(line)target.append(document.createTextNode(line));});
+  }
+ });
+}
 function render(rows){
  const box=$('messages');let added=false;const nearBottom=(box.scrollHeight-box.scrollTop-box.clientHeight)<100;
  if(!rows.length){
@@ -100,7 +112,7 @@ function render(rows){
   }
   bubble=document.createElement('div');bubble.dataset.messageId=row.id;
   bubble.className='bubble '+(row.sender_role==='customer'?'customer':'admin');
-  if(row.message)bubble.append(document.createTextNode(row.message));
+  if(row.message)appendFormattedText(bubble,row.message);
   if(row.media_type==='image'&&row.media_url){
    const link=document.createElement('a');link.href=row.media_url;link.target='_blank';link.rel='noopener';
    const img=document.createElement('img');img.src=row.media_url;img.className='media-preview';img.alt='Foto chat';link.append(img);bubble.append(link);
