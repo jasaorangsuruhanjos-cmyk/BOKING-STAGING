@@ -19,7 +19,7 @@
 .bubble{max-width:86%;padding:10px 12px;border-radius:15px;font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:0 2px 5px #153b5a0b}
 .bubble.customer{align-self:flex-end;background:#dff0ff;color:#17476d;border-bottom-right-radius:4px}
 .bubble.admin{align-self:flex-start;background:#fff;border:1px solid #e1eaf2;color:#263e52;border-bottom-left-radius:4px}
-.bubble strong{font-weight:750;color:#173f60}.bubble time{display:block;font-size:9px;opacity:.58;margin-top:5px;text-align:right}
+.bubble strong{font-weight:750;color:#173f60}.typing-indicator{align-self:flex-start;background:#fff;border:1px solid #e1eaf2;color:#738398;border-radius:15px;padding:10px 14px;font-size:12px;display:flex;align-items:center;gap:5px}.typing-indicator .dot{width:6px;height:6px;border-radius:50%;background:#8da4b8;animation:typingBounce 1s infinite ease-in-out}.typing-indicator .dot:nth-child(2){animation-delay:.15s}.typing-indicator .dot:nth-child(3){animation-delay:.3s}@keyframes typingBounce{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-5px);opacity:1}}.bubble time{display:block;font-size:9px;opacity:.58;margin-top:5px;text-align:right}
 .ticks{font-size:12px;letter-spacing:-3px;margin-left:5px;color:#8495a5}
 .ticks.read{color:#1688e8}
 .welcome{margin:auto;text-align:center;max-width:280px;color:#6e8296;font-size:12px;line-height:1.6}
@@ -68,6 +68,7 @@ const db=window.supabase.createClient(
 );
 const $=id=>document.getElementById(id);
 let conversationId=null,pollTimer=null,busy=false;
+let firstRenderDone=false,typingIndicator=null;
 $('back').addEventListener('click',()=>{location.href='./index.html';});
 function showLogin(){ const note=document.createElement('div');note.className='login-note';note.append(document.createTextNode('Anda perlu login ke akun pelanggan JOS untuk menggunakan chat.'));note.append(document.createElement('br'));const back=document.createElement('button');back.type='button';back.textContent='Kembali dan Login';back.addEventListener('click',()=>{location.href='./index.html';});note.append(back);$('messages').replaceChildren(note);$('form').style.display='none';$('status').textContent='Login diperlukan';}
 async function userNow(){const {data,error}=await db.auth.getUser();if(error)throw error;return data.user;}
@@ -88,6 +89,38 @@ function appendFormattedText(target,text){
    lines.forEach((line,index)=>{if(index)target.append(document.createElement('br'));if(line)target.append(document.createTextNode(line));});
   }
  });
+}
+function showTyping(){
+ if(typingIndicator)return;
+ const box=$('messages');
+ typingIndicator=document.createElement('div');typingIndicator.className='typing-indicator';typingIndicator.setAttribute('aria-label','JOS sedang mengetik');
+ const label=document.createElement('span');label.textContent='JOS sedang mengetik';
+ typingIndicator.append(label);
+ for(let i=0;i<3;i++){const dot=document.createElement('i');dot.className='dot';typingIndicator.append(dot);}
+ box.append(typingIndicator);box.scrollTop=box.scrollHeight;
+}
+function hideTyping(){
+ if(typingIndicator){typingIndicator.remove();typingIndicator=null;}
+}
+async function appendFormattedTextAnimated(target,text){
+ const parts=String(text).split(/(\*\*[^*]+\*\*)/g);
+ for(const part of parts){
+  if(!part)continue;
+  const bold=part.startsWith('**')&&part.endsWith('**')&&part.length>4;
+  const content=bold?part.slice(2,-2):part;
+  const lines=content.split('\n');
+  const parent=bold?document.createElement('strong'):target;
+  if(bold)target.append(parent);
+  for(let lineIndex=0;lineIndex<lines.length;lineIndex++){
+   if(lineIndex)parent.append(document.createElement('br'));
+   if(!lines[lineIndex])continue;
+   const node=document.createTextNode('');parent.append(node);
+   for(let i=0;i<lines[lineIndex].length;i++){
+    node.textContent+=lines[lineIndex][i];
+    if(i%2===0)await new Promise(resolve=>setTimeout(resolve,12));
+   }
+  }
+ }
 }
 function render(rows){
  const box=$('messages');let added=false;const nearBottom=(box.scrollHeight-box.scrollTop-box.clientHeight)<100;
@@ -112,7 +145,7 @@ function render(rows){
   }
   bubble=document.createElement('div');bubble.dataset.messageId=row.id;
   bubble.className='bubble '+(row.sender_role==='customer'?'customer':'admin');
-  if(row.message)appendFormattedText(bubble,row.message);
+  if(row.message){if(firstRenderDone&&row.sender_role!=='customer')appendFormattedTextAnimated(bubble,row.message);else appendFormattedText(bubble,row.message);}
   if(row.media_type==='image'&&row.media_url){
    const link=document.createElement('a');link.href=row.media_url;link.target='_blank';link.rel='noopener';
    const img=document.createElement('img');img.src=row.media_url;img.className='media-preview';img.alt='Foto chat';link.append(img);bubble.append(link);
@@ -138,6 +171,7 @@ function render(rows){
   bubble.append(time);box.append(bubble);added=true;
  });
  if(added&&nearBottom)box.scrollTop=box.scrollHeight;
+ firstRenderDone=true;
 }
 async function load(){
  if(busy)return;busy=true;
@@ -229,9 +263,12 @@ async function sendChatMessage({message='',file=null,mediaType=null,coords=null}
   // AI Groq hanya dipanggil dari chat staging; tidak mengubah alur website produksi.
   let aiResult=null;
   if(!file && message){
+   showTyping();
+   $('status').textContent='JOS sedang mengetik...';
    aiResult=await db.functions.invoke('jos-staging-ai',{body:{environment:'staging',conversation_id:conversationId,message_id:inserted.id}});
   }
   await load();
+  hideTyping();
   const notify=await db.functions.invoke('jos-staging-chat',{body:{action:'notify_customer_message',environment:'staging',conversation_id:conversationId,message_id:inserted.id}});
   const aiFailed=aiResult?.error || (aiResult?.data && aiResult.data.ok===false);
   const telegramFailed=notify.error || notify.data?.success!==true;
@@ -239,8 +276,8 @@ async function sendChatMessage({message='',file=null,mediaType=null,coords=null}
   if(aiFailed) issues.push('AI belum membalas');
   if(telegramFailed) issues.push('notifikasi Telegram gagal');
   $('status').textContent=issues.length?'Pesan tersimpan, tetapi '+issues.join(' dan ')+'.':'Pesan terkirim dan AI/Telegram berhasil diproses.';
- }catch(err){$('status').textContent='Gagal mengirim: '+(err.message||'Coba lagi.');}
- finally{$('send').disabled=false;}
+ }catch(err){hideTyping();$('status').textContent='Gagal mengirim: '+(err.message||'Coba lagi.');}
+ finally{hideTyping();$('send').disabled=false;}
 }
 $('form').addEventListener('submit',async e=>{e.preventDefault();const message=$('message').value.trim();if(!message)return;$('message').value='';await sendChatMessage({message});});
 $('photoBtn').addEventListener('click',()=>$('mediaFile').click());
