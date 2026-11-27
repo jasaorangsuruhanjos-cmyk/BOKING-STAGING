@@ -214,6 +214,11 @@ async function sendChatMessage({message='',file=null,mediaType=null,coords=null}
   if(coords){row.latitude=coords.latitude;row.longitude=coords.longitude;row.location_label='Lokasi pelanggan';}
   const {data:inserted,error}=await db.from('jos_chat_messages').insert(row).select('id').single();if(error)throw error;
   await db.from('jos_chat_conversations').update({updated_at:new Date().toISOString()}).eq('id',conversationId);
+  // AI Groq hanya dipanggil dari chat staging; tidak mengubah alur website produksi.
+  let aiResult=null;
+  if(!file && message){
+   aiResult=await db.functions.invoke('jos-staging-ai',{body:{environment:'staging',conversation_id:conversationId,message_id:inserted.id}});
+  }
   await load();
   const notify=await db.functions.invoke('jos-staging-chat',{body:{action:'notify_customer_message',conversation_id:conversationId,message_id:inserted.id}});
   $('status').textContent=notify.error||notify.data?.success!==true?'Pesan tersimpan. Notifikasi Telegram belum aktif.':'Pesan terkirim ke Admin JOS.';
