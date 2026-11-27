@@ -78,13 +78,13 @@ async function ensureConversation(user){
  if(created.error)throw created.error;return created.data.id;
 }
 function appendFormattedText(target,text){
- const parts=String(text).split(/(\\*\\*[^*]+\\*\\*)/g);
+ const parts=String(text).split(/(\*\*[^*]+\*\*)/g);
  parts.forEach(part=>{
   if(!part)return;
   if(part.startsWith('**')&&part.endsWith('**')&&part.length>4){
    const strong=document.createElement('strong');strong.textContent=part.slice(2,-2);target.append(strong);
   }else{
-   const lines=part.split('\\n');
+   const lines=part.split('\n');
    lines.forEach((line,index)=>{if(index)target.append(document.createElement('br'));if(line)target.append(document.createTextNode(line));});
   }
  });
