@@ -19,7 +19,7 @@
 .bubble{max-width:86%;padding:10px 12px;border-radius:15px;font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:0 2px 5px #153b5a0b}
 .bubble.customer{align-self:flex-end;background:#dff0ff;color:#17476d;border-bottom-right-radius:4px}
 .bubble.admin{align-self:flex-start;background:#fff;border:1px solid #e1eaf2;color:#263e52;border-bottom-left-radius:4px}
-.bubble strong{font-weight:750;color:#173f60}.typing-indicator{align-self:flex-start;background:#fff;border:1px solid #e1eaf2;color:#738398;border-radius:15px;padding:10px 14px;font-size:12px;display:flex;align-items:center;gap:5px}.typing-indicator .dot{width:6px;height:6px;border-radius:50%;background:#8da4b8;animation:typingBounce 1s infinite ease-in-out}.typing-indicator .dot:nth-child(2){animation-delay:.15s}.typing-indicator .dot:nth-child(3){animation-delay:.3s}@keyframes typingBounce{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-5px);opacity:1}}.bubble time{display:block;font-size:9px;opacity:.58;margin-top:5px;text-align:right}
+.bubble strong{font-weight:750;color:#173f60}.typing-indicator{align-self:flex-start;background:#fff;border:1px solid #e1eaf2;color:#738398;border-radius:18px;padding:11px 15px;font-size:12px;display:flex;align-items:center;gap:1px;box-shadow:0 3px 10px #153b5a0b}.typing-indicator .typing-word{display:inline-flex;align-items:center;white-space:pre}.typing-indicator .typing-letter{display:inline-block;animation:typingWave 1.15s ease-in-out infinite;will-change:transform}.typing-indicator .typing-letter:nth-child(2n){animation-delay:.08s}.typing-indicator .typing-letter:nth-child(3n){animation-delay:.16s}.typing-indicator .typing-letter:nth-child(4n){animation-delay:.24s}.typing-indicator .dot{display:inline-block;font-weight:800;font-size:17px;line-height:10px;color:#0878d1;margin-left:1px;animation:typingDot 1.2s infinite ease-in-out}.typing-indicator .dot:nth-last-child(2){animation-delay:.18s}.typing-indicator .dot:last-child{animation-delay:.36s}@keyframes typingWave{0%,60%,100%{transform:translateY(0);opacity:.65}30%{transform:translateY(-3px);opacity:1}}@keyframes typingDot{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-3px);opacity:1}}@media(prefers-reduced-motion:reduce){.typing-indicator .typing-letter,.typing-indicator .dot{animation:none}}.bubble time{display:block;font-size:9px;opacity:.58;margin-top:5px;text-align:right}
 .ticks{font-size:12px;letter-spacing:-3px;margin-left:5px;color:#8495a5}
 .ticks.read{color:#1688e8}
 .welcome{margin:auto;text-align:center;max-width:280px;color:#6e8296;font-size:12px;line-height:1.6}
@@ -94,9 +94,12 @@ function showTyping(){
  if(typingIndicator)return;
  const box=$('messages');
  typingIndicator=document.createElement('div');typingIndicator.className='typing-indicator';typingIndicator.setAttribute('aria-label','JOS sedang mengetik');
- const label=document.createElement('span');label.textContent='JOS sedang mengetik';
+ const label=document.createElement('span');label.className='typing-word';label.setAttribute('aria-hidden','true');
+ for(const char of 'JOS sedang mengetik'){
+  const letter=document.createElement('span');letter.className='typing-letter';letter.textContent=char===' '?'\\u00a0':char;label.append(letter);
+ }
  typingIndicator.append(label);
- for(let i=0;i<3;i++){const dot=document.createElement('i');dot.className='dot';typingIndicator.append(dot);}
+ for(let i=0;i<3;i++){const dot=document.createElement('span');dot.className='dot';dot.textContent='.';typingIndicator.append(dot);}
  box.append(typingIndicator);box.scrollTop=box.scrollHeight;
 }
 function hideTyping(){
