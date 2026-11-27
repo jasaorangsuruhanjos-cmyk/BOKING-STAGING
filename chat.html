@@ -220,8 +220,13 @@ async function sendChatMessage({message='',file=null,mediaType=null,coords=null}
    aiResult=await db.functions.invoke('jos-staging-ai',{body:{environment:'staging',conversation_id:conversationId,message_id:inserted.id}});
   }
   await load();
-  const notify=await db.functions.invoke('jos-staging-chat',{body:{action:'notify_customer_message',conversation_id:conversationId,message_id:inserted.id}});
-  $('status').textContent=notify.error||notify.data?.success!==true?'Pesan tersimpan. Notifikasi Telegram belum aktif.':'Pesan terkirim ke Admin JOS.';
+  const notify=await db.functions.invoke('jos-staging-chat',{body:{action:'notify_customer_message',environment:'staging',conversation_id:conversationId,message_id:inserted.id}});
+  const aiFailed=aiResult?.error || (aiResult?.data && aiResult.data.ok===false);
+  const telegramFailed=notify.error || notify.data?.success!==true;
+  const issues=[];
+  if(aiFailed) issues.push('AI belum membalas');
+  if(telegramFailed) issues.push('notifikasi Telegram gagal');
+  $('status').textContent=issues.length?'Pesan tersimpan, tetapi '+issues.join(' dan ')+'.':'Pesan terkirim dan AI/Telegram berhasil diproses.';
  }catch(err){$('status').textContent='Gagal mengirim: '+(err.message||'Coba lagi.');}
  finally{$('send').disabled=false;}
 }
