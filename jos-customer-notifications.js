@@ -29,7 +29,7 @@
       .top .search-row .jos-page-name{flex:0 0 auto!important;max-width:64px!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
       .top .search-row .search{flex:1 1 0!important;width:auto!important;min-width:40px!important;max-width:none!important;margin:0!important}
       .top .search-row .search input{min-width:0!important;width:100%!important}
-      .top .search-row .jos-online{flex:0 0 auto!important;white-space:nowrap!important}
+      .top .search-row .jos-online{display:none!important}
       .top .search-row #josStageNotificationBell{position:relative!important;order:98!important;display:none;flex:0 0 30px!important;width:30px!important;min-width:30px!important;height:30px!important;max-height:30px!important;margin:0!important;padding:0!important;border:1px solid #d8e8f5!important;border-radius:9px!important;background:#fff!important;color:#07569a!important;font-size:15px!important;line-height:1!important;align-items:center!important;justify-content:center!important;box-shadow:0 2px 5px #0b47721a!important;cursor:pointer!important}
       .top .search-row #openMainMenu{position:static!important;inset:auto!important;order:99!important;flex:0 0 30px!important;width:30px!important;min-width:30px!important;height:30px!important;max-height:30px!important;margin:0!important;padding:0!important}
       .top .search-row #openMainMenu span{width:16px!important}
