@@ -24,13 +24,16 @@
     const style = document.createElement('style');
     style.id = 'josStageNotificationStyles';
     style.textContent = `
-      .top .search-row{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:7px!important;width:100%;min-width:0;box-sizing:border-box}
-      .top .search-row #openMainMenu{position:static!important;inset:auto!important;flex:0 0 36px!important;width:36px!important;height:36px!important;margin:0!important;padding:0!important}
-      .top .search-row #josStageNotificationBell{position:relative;flex:0 0 36px;width:36px;height:36px;min-width:36px;border:1px solid #d8e8f5;border-radius:11px;background:#fff;color:#07569a;font-size:17px;display:none;align-items:center;justify-content:center;box-shadow:0 3px 10px #0b47721a;cursor:pointer}
-      .top .search-row input[type=search],.top .search-row input[placeholder*=Cari],.top .search-row .search-box,.top .search-row .search-wrap{min-width:0!important;max-width:100%!important}
-      .top .search-row #openMainMenu{order:99}
-      .top .search-row #josStageNotificationBell{order:98}
-      #josStageNotificationBell .count{position:absolute;right:-5px;top:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:20px;background:#e53935;color:#fff;font-size:10px;font-weight:900;display:none;align-items:center;justify-content:center;border:2px solid #fff}
+      /* Lima elemen dipaksa tetap dalam satu baris: judul, cari, online, lonceng, menu. */
+      .top .search-row{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important;justify-content:flex-start!important;gap:5px!important;width:100%!important;min-width:0!important;box-sizing:border-box!important}
+      .top .search-row .jos-page-name{flex:0 0 auto!important;max-width:64px!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+      .top .search-row .search{flex:1 1 0!important;width:auto!important;min-width:40px!important;max-width:none!important;margin:0!important}
+      .top .search-row .search input{min-width:0!important;width:100%!important}
+      .top .search-row .jos-online{flex:0 0 auto!important;white-space:nowrap!important}
+      .top .search-row #josStageNotificationBell{position:relative!important;order:98!important;display:none;flex:0 0 30px!important;width:30px!important;min-width:30px!important;height:30px!important;max-height:30px!important;margin:0!important;padding:0!important;border:1px solid #d8e8f5!important;border-radius:9px!important;background:#fff!important;color:#07569a!important;font-size:15px!important;line-height:1!important;align-items:center!important;justify-content:center!important;box-shadow:0 2px 5px #0b47721a!important;cursor:pointer!important}
+      .top .search-row #openMainMenu{position:static!important;inset:auto!important;order:99!important;flex:0 0 30px!important;width:30px!important;min-width:30px!important;height:30px!important;max-height:30px!important;margin:0!important;padding:0!important}
+      .top .search-row #openMainMenu span{width:16px!important}
+      #josStageNotificationBell .count{position:absolute;right:-5px;top:-5px;min-width:16px;height:16px;padding:0 3px;border-radius:20px;background:#e53935;color:#fff;font-size:9px;font-weight:900;display:none;align-items:center;justify-content:center;border:2px solid #fff}
       #josStageNotificationLayer{position:fixed;inset:0;z-index:110000;background:#102c4666;display:none;align-items:flex-start;justify-content:center;padding:76px 12px 18px}
       #josStageNotificationLayer.open{display:flex}
       #josStageNotificationPanel{width:min(100%,520px);max-height:min(78vh,680px);overflow:auto;background:#fff;border:1px solid #dce9f4;border-radius:20px;box-shadow:0 18px 55px #092e4a44}
@@ -44,8 +47,18 @@
       .jos-stage-notice p{margin:0;color:#496176;font-size:12px;line-height:1.55;white-space:pre-line}
       .jos-stage-notice time{display:block;margin-top:9px;color:#8294a4;font-size:10px}
       .jos-stage-empty{padding:32px 12px;text-align:center;color:#71869a;font-size:13px}
+      @media(max-width:380px){
+        .top{padding-left:10px!important;padding-right:10px!important}
+        .top .search-row{gap:4px!important}
+        .top .search-row .jos-page-name{max-width:55px!important;font-size:12px!important}
+        .top .search-row .search{min-width:32px!important;height:29px!important;padding:0 4px!important}
+        .top .search-row .search input{font-size:9px!important}
+        .top .search-row .jos-online{font-size:7px!important;padding:3px 4px!important;gap:3px!important}
+        .top .search-row #josStageNotificationBell,.top .search-row #openMainMenu{flex-basis:28px!important;width:28px!important;min-width:28px!important;height:28px!important;max-height:28px!important}
+      }
       @media(max-width:430px){#josStageNotificationLayer{padding-top:68px}#josStageNotificationPanel{max-height:82vh}}
     `;
+
     document.head.appendChild(style);
   }
 
