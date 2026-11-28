@@ -24,7 +24,12 @@
     const style = document.createElement('style');
     style.id = 'josStageNotificationStyles';
     style.textContent = `
-      .top .search-row{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:7px!important;width:100%;min-width:0;box-sizing:border-box}\n      .top .search-row #openMainMenu{position:static!important;inset:auto!important;flex:0 0 36px!important;width:36px!important;height:36px!important;margin:0!important;padding:0!important}\n      .top .search-row #josStageNotificationBell{position:relative;flex:0 0 36px;width:36px;height:36px;min-width:36px;border:1px solid #d8e8f5;border-radius:11px;background:#fff;color:#07569a;font-size:17px;display:none;align-items:center;justify-content:center;box-shadow:0 3px 10px #0b47721a;cursor:pointer}\n      .top .search-row input[type=search],.top .search-row input[placeholder*=Cari],.top .search-row .search-box,.top .search-row .search-wrap{min-width:0!important;max-width:100%!important}\n      .top .search-row #openMainMenu{order:99}\n      .top .search-row #josStageNotificationBell{order:98}
+      .top .search-row{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:7px!important;width:100%;min-width:0;box-sizing:border-box}
+      .top .search-row #openMainMenu{position:static!important;inset:auto!important;flex:0 0 36px!important;width:36px!important;height:36px!important;margin:0!important;padding:0!important}
+      .top .search-row #josStageNotificationBell{position:relative;flex:0 0 36px;width:36px;height:36px;min-width:36px;border:1px solid #d8e8f5;border-radius:11px;background:#fff;color:#07569a;font-size:17px;display:none;align-items:center;justify-content:center;box-shadow:0 3px 10px #0b47721a;cursor:pointer}
+      .top .search-row input[type=search],.top .search-row input[placeholder*=Cari],.top .search-row .search-box,.top .search-row .search-wrap{min-width:0!important;max-width:100%!important}
+      .top .search-row #openMainMenu{order:99}
+      .top .search-row #josStageNotificationBell{order:98}
       #josStageNotificationBell .count{position:absolute;right:-5px;top:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:20px;background:#e53935;color:#fff;font-size:10px;font-weight:900;display:none;align-items:center;justify-content:center;border:2px solid #fff}
       #josStageNotificationLayer{position:fixed;inset:0;z-index:110000;background:#102c4666;display:none;align-items:flex-start;justify-content:center;padding:76px 12px 18px}
       #josStageNotificationLayer.open{display:flex}
